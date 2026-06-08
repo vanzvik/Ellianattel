@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ellia Nattel.K — Exact Layout Architecture</title>
+    <style>
+        /* ========================================
+           BASE RESET & SHARED STYLES
+        ======================================== */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body, html { width: 100%; height: 100%; background-color: #ffffff; color: #000000; font-family: 'Courier New', Courier, monospace; overflow-x: hidden; position: relative; }
+
+        .blueprint-canvas { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background-image: linear-gradient(to right, rgba(0, 0, 0, 0.035) 1px, transparent 1px), 
+                              linear-gradient(to bottom, rgba(0, 0, 0, 0.035) 1px, transparent 1px); 
+            background-size: 20px 20px; z-index: 1; pointer-events: none; 
+        }
+
+        /* ========================================
+           SHARED ANIMATIONS
+        ======================================== */
+        @keyframes wipeFromLeft { 0% { clip-path: inset(0 100% 0 0); opacity: 0; } 5% { opacity: 1; } 100% { clip-path: inset(0 0 0 0); opacity: 1; } }
+        @keyframes wipeFromRight { 0% { clip-path: inset(0 0 0 100%); opacity: 0; } 5% { opacity: 1; } 100% { clip-path: inset(0 0 0 0); opacity: 1; } }
+        @keyframes wipeFromTop { 0% { clip-path: inset(0 0 100% 0); opacity: 0; } 5% { opacity: 1; } 100% { clip-path: inset(0 0 0 0); opacity: 1; } }
+        @keyframes wipeFromBottom { 0% { clip-path: inset(100% 0 0 0); opacity: 0; } 5% { opacity: 1; } 100% { clip-path: inset(0 0 0 0); opacity: 1; } }
+        @keyframes typographicGlitchEntrance { 
+            0% { opacity: 0; transform: translateY(15px) scaleY(1.2); filter: blur(2px); } 
+            65% { opacity: 0.2; } 
+            80% { opacity: 0.9; transform: translateY(-1px) scaleY(0.98); filter: blur(0px); } 
+            100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0px); } 
+        }
+        @keyframes assetRevealFluid { 0% { opacity: 0; transform: translateY(8px); } 100% { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeOut { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(15px); } }
+
+        @keyframes wipeOutToRight { 0% { clip-path: inset(0 0 0 0); opacity: 1; } 100% { clip-path: inset(0 0 0 100%); opacity: 0; } }
+        @keyframes wipeOutToTop { 0% { clip-path: inset(0 0 0 0); opacity: 1; } 100% { clip-path: inset(0 0 100% 0); opacity: 0; } }
+        @keyframes wipeOutToBottom { 0% { clip-path: inset(0 0 0 0); opacity: 1; } 100% { clip-path: inset(100% 0 0 0); opacity: 0; } }
+
+        /* ========================================
+           STATIC ARCHITECTURE (the grid container)
+        ======================================== */
+        .primary-architecture-wrapper { 
+            position: relative; z-index: 3; max-width: 1600px; margin: 0 auto; 
+            display: grid; grid-template-columns: 1.3fr 2.2fr 2fr; 
+            padding: 80px 60px; gap: 0px; 
+        }
+        .app-header { 
+            grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: flex-start; 
+            padding-bottom: 80px; opacity: 0; 
+            animation: assetRevealFluid 0.9s cubic-bezier(0.25, 1, 0.5, 1) both; animation-delay: 1.5s; 
+        }
+        .brand-logo-container { max-width: 340px; height: auto; }
+        .brand-logo-img { width: 100%; height: auto; display: block; }
+        .app-navigation { display: flex; gap: 0px; align-items: center; padding-top: 10px; padding-right: 15%; }
+        .app-navigation-link { font-size: 0.75rem; font-weight: 600; text-decoration: none; color: #000000; letter-spacing: 1.5px; padding: 0 15px; }
+        .nav-divider { width: 1px; height: 14px; background-color: #000000; opacity: 0.4; }
+        .structural-line-h1 { 
+            position: absolute; top: 52px; left: 0; width: 514px; height: 14px; z-index: 2; 
+            animation: wipeFromLeft 1.1s cubic-bezier(0.19, 1, 0.22, 1) both; animation-delay: 0s; 
+        }
+
+        /* ========================================
+           GALLERY
+        ======================================== */
+        #gallery-wrapper { grid-column: 1 / -1; }
+        .masonry-gallery { 
+            column-count: 4; column-gap: 100px; 
+            padding: 0 80px; margin-top: 20px; 
+        }
+        .gallery-item { 
+            margin-bottom: 50px; break-inside: avoid; opacity: 0; 
+            animation: assetRevealFluid 0.8s ease-out forwards; 
+        }
+        .gallery-item img { width: 100%; display: block; transition: 0.4s; }
+        .gallery-item img:hover { transform: scale(1.02); cursor: pointer; }
+
+        /* ========================================
+           PRODUCT VIEW STYLES
+        ======================================== */
+        .structural-line-v1 { 
+            position: absolute; left: 80px; bottom: 0; width: 14px; height: 80%; z-index: 2; 
+            animation: wipeFromBottom 1.2s cubic-bezier(0.19, 1, 0.22, 1) both; animation-delay: 0.3s; 
+        }
+        .structural-line-h2 { 
+            position: absolute; bottom: 12%; right: 0; width: 72%; height: 14px; z-index: 2; 
+            animation: wipeFromRight 1.4s cubic-bezier(0.19, 1, 0.22, 1) both; animation-delay: 0.6s; 
+        }
+        .structural-line-v2 { 
+            position: absolute; right: 80px; top: 0; width: 14px; height: 100vh; 
+            animation: wipeFromTop 1.5s cubic-bezier(0.25, 1, 0.5, 1) both; animation-delay: 0.9s; 
+        }
+
+        .product-hero-facade { 
+            grid-column: 1; position: relative; display: flex; align-items: center; 
+            padding-left: 50px; padding-right: 20px; height: 480px; 
+        }
+        .glitch-title { 
+            font-size: 3.2rem; font-weight: normal; line-height: 1.15; font-family: Garamond, serif; 
+        }
+        .glitch-title .word-box { display: inline-block; white-space: nowrap; }
+        .glitch-title .letter-box { 
+            display: inline-block; opacity: 0; transform: translateY(15px) scaleY(1.2); 
+            animation: typographicGlitchEntrance 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards; 
+        }
+
+        .product-central-gallery { 
+            grid-column: 2; position: relative; display: flex; justify-content: center; align-items: center; 
+            height: 480px; opacity: 0; 
+            animation: assetRevealFluid 1.2s cubic-bezier(0.25, 1, 0.5, 1) both; animation-delay: 1.8s; 
+        }
+        .slider-frame { position: relative; width: 100%; height: 100%; overflow: hidden; }
+        .slider-slide { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; 
+            opacity: 0; transition: opacity 0.8s cubic-bezier(0.76, 0, 0.24, 1), 
+                                  transform 0.8s cubic-bezier(0.76, 0, 0.24, 1), 
+                                  clip-path 0.8s cubic-bezier(0.76, 0, 0.24, 1); 
+            transform: scale(0.96) translateX(10px); 
+        }
+        .slider-slide.active { 
+            opacity: 1; transform: scale(1) translateX(0); 
+            clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); z-index: 2; 
+        }
+        .slider-slide.next { 
+            opacity: 0; transform: scale(0.96) translateX(20px); 
+            clip-path: polygon(100% 0, 100% 0, 100% 100%, 100% 100%); z-index: 1; 
+        }
+        .slider-pagination { position: absolute; bottom: -30px; display: flex; gap: 10px; }
+        .dot { width: 30px; height: 2px; background: #ccc; transition: background 0.3s; cursor: pointer; }
+        .dot.active { background: #000; }
+
+        .product-manifesto-container { 
+            grid-column: 3; position: relative; display: flex; flex-direction: column; justify-content: center; 
+            padding-left: 60px; padding-right: 40px; opacity: 0; 
+            animation: assetRevealFluid 1.0s cubic-bezier(0.25, 1, 0.5, 1) both; animation-delay: 2.1s; 
+            height: 480px; 
+        }
+        .manifesto-body-text { 
+            font-size: 1.25rem; line-height: 1.9; margin-bottom: 45px; color: #1a1a1a; max-width: 380px; 
+        }
+        .manifesto-meta-box h4 { font-size: 0.78rem; font-weight: bold; letter-spacing: 2.5px; margin-bottom: 8px; }
+        .manifesto-meta-box p { font-size: 0.90rem; color: #444444; }
+
+        /* ========================================
+           RESPONSIVE
+        ======================================== */
+        @media (max-width: 1124px) { 
+            .masonry-gallery { column-count: 2; padding: 0 20px; column-gap: 30px; } 
+            .primary-architecture-wrapper { padding: 40px 24px; display: block; } 
+            .structural-line-h1 { display: none !important; } 
+            .app-navigation { padding-right: 0; } 
+            
+            .product-hero-facade, .product-central-gallery, .product-manifesto-container { padding: 20px 0; } 
+            .product-central-gallery { height: 350px; } 
+            .structural-line-v1, .structural-line-v2, .structural-line-h2 { display: none !important; } 
+        }
+    </style>
+</head>
+<body>
+
+    <div class="blueprint-canvas"></div>
+    <img src="images/line-top-left.png" alt="" class="structural-line-h1">
+
+    <!-- PRODUCT STRUCTURAL LINES - AT BODY LEVEL (exactly like the top line) -->
+    <img src="images/line-bottom-right-h.png" alt="" class="structural-line-h2 product-structural-line" style="display: none;">
+    <img src="images/line-bottom-left-v.png" alt="" class="structural-line-v2 product-structural-line" style="display: none;">
+    <img src="images/line-bottom-left-v.png" alt="" class="structural-line-v1 product-structural-line" style="display: none;">
+
+    <div class="primary-architecture-wrapper">
+        
+        <!-- Header always visible -->
+        <header class="app-header">
+            <div class="brand-logo-container">
+                <a href="#"><img src="images/logo.png" alt="Ellia Nattel.K DESIGNER" class="brand-logo-img"></a>
+            </div>
+            <nav class="app-navigation">
+                <a href="#contact" class="app-navigation-link">CONTACT</a>
+                <div class="nav-divider"></div>
+                <a href="#about" class="app-navigation-link">ABOUT</a>
+            </nav>
+        </header>
+
+        <!-- GALLERY -->
+        <div id="gallery-wrapper" style="grid-column: 1 / -1;">
+            <main id="gallery-view" class="masonry-gallery"></main>
+        </div>
+
+        <!-- PRODUCT WRAPPER (only content sections) -->
+        <div id="product-wrapper" style="display: none; grid-column: 1 / -1;">
+            
+            <section class="product-hero-facade">
+                <h2 class="glitch-title">Folded Asymmetric Earrings</h2>
+            </section>
+
+            <section class="product-central-gallery">
+                <div class="slider-frame" id="slider">
+                    <img src="images/product-showcase-1.png" alt="Angle 1" class="slider-slide active">
+                    <img src="images/product-showcase-2.png" alt="Angle 2" class="slider-slide next">
+                </div>
+                <div class="slider-pagination">
+                    <span class="dot active"></span>
+                    <span class="dot"></span>
+                </div>
+            </section>
+
+            <section class="product-manifesto-container">
+                <p class="manifesto-body-text">
+                    Hand-sculpted folded earrings. Each earring consists of two interlocking parts — front and back — creating a complex three-dimensional form.
+                </p>
+                <div class="manifesto-meta-box">
+                    <h4>MATERIALS :</h4>
+                    <p>925 Sterling silver</p>
+                </div>
+            </section>
+        </div>
+
+    </div>
+
+    <script>
+        function initGallery() {
+            const gallery = document.getElementById('gallery-view');
+            if (!gallery) return;
+            
+            gallery.innerHTML = '';
+            const baseGalleryDelay = 0.2;
+            const totalImages = 8;
+            
+            for (let i = 1; i <= totalImages; i++) {
+                const div = document.createElement('div');
+                div.className = 'gallery-item';
+                const delay = (baseGalleryDelay + (i * 0.15)).toFixed(2);
+                div.style.animationDelay = `${delay}s`;
+                
+                const link = document.createElement('a');
+                link.href = '#';
+                link.innerHTML = `<img src="images/${i}.png" alt="Product ${i}">`;
+                
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    showProductView();
+                });
+                
+                div.appendChild(link);
+                gallery.appendChild(div);
+            }
+        }
+
+        function restartProductAnimations() {
+            const productWrapper = document.getElementById('product-wrapper');
+            if (!productWrapper) return;
+
+            const animatedElements = productWrapper.querySelectorAll(
+                '.product-hero-facade, .product-central-gallery, .product-manifesto-container'
+            );
+
+            animatedElements.forEach(el => {
+                el.style.animation = 'none';
+                void el.offsetWidth;
+                el.style.animation = '';
+            });
+        }
+
+        function restartStructuralLines() {
+            document.querySelectorAll('.product-structural-line').forEach(line => {
+                line.style.animation = 'none';
+                void line.offsetWidth;
+                line.style.animation = '';
+            });
+        }
+
+        let productAutoTimeout = null;
+        let productClickHandler = null;
+
+        function initProductScripts() {
+            const textTargets = document.querySelectorAll(".glitch-title");
+            textTargets.forEach(target => {
+                const rawText = target.textContent.trim();
+                if (!rawText) return;
+                
+                target.textContent = "";
+                const wordsArray = rawText.split(" ");
+                const baseTextDelay = 0.5;
+
+                wordsArray.forEach((word, wordIndex) => {
+                    const wordSpan = document.createElement("span");
+                    wordSpan.classList.add("word-box");
+
+                    for (let i = 0; i < word.length; i++) {
+                        const letterSpan = document.createElement("span");
+                        letterSpan.classList.add("letter-box");
+                        letterSpan.textContent = word[i];
+                        const randomDelay = (baseTextDelay + Math.random() * 0.65).toFixed(3);
+                        letterSpan.style.animationDelay = `${randomDelay}s`;
+                        wordSpan.appendChild(letterSpan);
+                    }
+                    target.appendChild(wordSpan);
+                    if (wordIndex < wordsArray.length - 1) {
+                        target.appendChild(document.createTextNode(" "));
+                    }
+                });
+            });
+
+            const slider = document.getElementById("slider");
+            if (!slider) return;
+
+            if (productAutoTimeout) {
+                clearTimeout(productAutoTimeout);
+                productAutoTimeout = null;
+            }
+            if (productClickHandler) {
+                slider.removeEventListener("click", productClickHandler);
+                productClickHandler = null;
+            }
+
+            const slides = document.querySelectorAll(".slider-slide");
+            const dots = document.querySelectorAll(".dot");
+            let currentSlideIndex = 0;
+            let isAutoPlayed = false;
+
+            window.updateSlider = function(index) {
+                if (!slides[currentSlideIndex] || !slides[index]) return;
+                
+                slides[currentSlideIndex].classList.remove("active");
+                slides[currentSlideIndex].classList.add("next");
+                dots[currentSlideIndex].classList.remove("active");
+
+                currentSlideIndex = index;
+
+                slides[currentSlideIndex].classList.add("active");
+                slides[currentSlideIndex].classList.remove("next");
+                dots[currentSlideIndex].classList.add("active");
+            };
+
+            productClickHandler = () => {
+                isAutoPlayed = true;
+                const nextIndex = currentSlideIndex === 0 ? 1 : 0;
+                window.updateSlider(nextIndex);
+            };
+            slider.addEventListener("click", productClickHandler);
+
+            productAutoTimeout = setTimeout(() => {
+                if (!isAutoPlayed && slides.length > 1) {
+                    window.updateSlider(1);
+                    isAutoPlayed = true;
+                }
+            }, 2500);
+        }
+
+        function showProductView() {
+            const galleryWrapper = document.getElementById('gallery-wrapper');
+            const productWrapper = document.getElementById('product-wrapper');
+            if (!galleryWrapper || !productWrapper) return;
+
+            galleryWrapper.style.animation = 'fadeOut 0.5s forwards';
+
+            setTimeout(() => {
+                galleryWrapper.style.display = 'none';
+                galleryWrapper.style.animation = '';
+
+                productWrapper.style.display = 'contents';
+
+                // Show the structural lines (they are now at root level)
+                document.querySelectorAll('.product-structural-line').forEach(line => {
+                    line.style.display = 'block';
+                });
+
+                restartProductAnimations();
+                restartStructuralLines();
+                initProductScripts();
+            }, 500);
+        }
+
+        function showGalleryView() {
+            const galleryWrapper = document.getElementById('gallery-wrapper');
+            const productWrapper = document.getElementById('product-wrapper');
+            if (!galleryWrapper || !productWrapper) return;
+
+            if (productAutoTimeout) {
+                clearTimeout(productAutoTimeout);
+                productAutoTimeout = null;
+            }
+
+            // Manually trigger fadeOut exit on the three sections (reliable even with display:contents)
+            const sections = productWrapper.querySelectorAll(
+                '.product-hero-facade, .product-central-gallery, .product-manifesto-container'
+            );
+            sections.forEach(section => {
+                section.style.animation = 'none';
+                void section.offsetWidth; // force reflow so animation restarts
+                section.style.animation = 'fadeOut 0.4s forwards';
+            });
+
+            // WIPE OUT on the structural lines (they are at body level)
+            const lineH2 = document.querySelector('.structural-line-h2.product-structural-line');
+            const lineV2 = document.querySelector('.structural-line-v2.product-structural-line');
+            const lineV1 = document.querySelector('.structural-line-v1.product-structural-line');
+
+            if (lineH2) lineH2.style.animation = 'wipeOutToRight 0.45s forwards';
+            if (lineV2) lineV2.style.animation = 'wipeOutToTop 0.45s forwards';
+            if (lineV1) lineV1.style.animation = 'wipeOutToBottom 0.45s forwards';
+
+            setTimeout(() => {
+                productWrapper.style.display = 'none';
+
+                // Hide lines
+                if (lineH2) { lineH2.style.display = 'none'; lineH2.style.animation = ''; }
+                if (lineV2) { lineV2.style.display = 'none'; lineV2.style.animation = ''; }
+                if (lineV1) { lineV1.style.display = 'none'; lineV1.style.animation = ''; }
+
+                // Reset sections for next time
+                sections.forEach(section => section.style.animation = '');
+
+                galleryWrapper.style.display = 'block';
+            }, 450);
+        }
+
+        function initLogoHandler() {
+            const logoLink = document.querySelector('.brand-logo-container a');
+            if (!logoLink) return;
+
+            logoLink.addEventListener('click', (e) => {
+                const productWrapper = document.getElementById('product-wrapper');
+                const isProductActive = productWrapper && productWrapper.style.display === 'contents';
+
+                if (isProductActive) {
+                    e.preventDefault();
+                    showGalleryView();
+                }
+            });
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            initGallery();
+            initLogoHandler();
+        });
+    </script>
+</body>
+</html>
