@@ -3,437 +3,552 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ellia Nattel.K — Exact Layout Architecture</title>
+    <title>Ellia Nattel.K — Camera Motion</title>
     <style>
         /* ========================================
-           BASE RESET & SHARED STYLES
+           BASE RESET & SHARED STYLES  (faithful to original)
         ======================================== */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body, html { width: 100%; height: 100%; background-color: #ffffff; color: #000000; font-family: 'Courier New', Courier, monospace; overflow-x: hidden; position: relative; }
 
-        .blueprint-canvas { 
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-            background-image: linear-gradient(to right, rgba(0, 0, 0, 0.035) 1px, transparent 1px), 
-                              linear-gradient(to bottom, rgba(0, 0, 0, 0.035) 1px, transparent 1px); 
-            background-size: 20px 20px; z-index: 1; pointer-events: none; 
+        /* cinematic easings — flowing, light, no bounce */
+        :root{
+            --dive: cubic-bezier(0.7, 0, 0.84, 0);   /* accelerate INTO the sheet */
+            --land: cubic-bezier(0.16, 1, 0.3, 1);   /* settle, no overshoot      */
+            --glide: cubic-bezier(0.65, 0, 0.35, 1); /* smooth two-way camera     */
+        }
+
+        .blueprint-canvas {
+            position: fixed; top: 0; left: 0; width: 120%; height: 120%;
+            background-color: #ffffff;
+            background-image:
+                linear-gradient(to right, rgba(0, 0, 0, 0.035) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(0, 0, 0, 0.035) 1px, transparent 1px);
+            background-size: 20px 20px;
+            z-index: 1; pointer-events: none;
+            will-change: transform;
+            transition: transform 0.9s var(--glide);
         }
 
         /* ========================================
-           SHARED ANIMATIONS
+           CAMERA STAGE
         ======================================== */
-        @keyframes wipeFromLeft { 0% { clip-path: inset(0 100% 0 0); opacity: 0; } 5% { opacity: 1; } 100% { clip-path: inset(0 0 0 0); opacity: 1; } }
-        @keyframes wipeFromRight { 0% { clip-path: inset(0 0 0 100%); opacity: 0; } 5% { opacity: 1; } 100% { clip-path: inset(0 0 0 0); opacity: 1; } }
-        @keyframes wipeFromTop { 0% { clip-path: inset(0 0 100% 0); opacity: 0; } 5% { opacity: 1; } 100% { clip-path: inset(0 0 0 0); opacity: 1; } }
-        @keyframes wipeFromBottom { 0% { clip-path: inset(100% 0 0 0); opacity: 0; } 5% { opacity: 1; } 100% { clip-path: inset(0 0 0 0); opacity: 1; } }
-        @keyframes typographicGlitchEntrance { 
-            0% { opacity: 0; transform: translateY(15px) scaleY(1.2); filter: blur(2px); } 
-            65% { opacity: 0.2; } 
-            80% { opacity: 0.9; transform: translateY(-1px) scaleY(0.98); filter: blur(0px); } 
-            100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0px); } 
-        }
-        @keyframes assetRevealFluid { 0% { opacity: 0; transform: translateY(8px); } 100% { opacity: 1; transform: translateY(0); } }
-        @keyframes fadeOut { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(15px); } }
-
-        @keyframes wipeOutToRight { 0% { clip-path: inset(0 0 0 0); opacity: 1; } 100% { clip-path: inset(0 0 0 100%); opacity: 0; } }
-        @keyframes wipeOutToTop { 0% { clip-path: inset(0 0 0 0); opacity: 1; } 100% { clip-path: inset(0 0 100% 0); opacity: 0; } }
-        @keyframes wipeOutToBottom { 0% { clip-path: inset(0 0 0 0); opacity: 1; } 100% { clip-path: inset(100% 0 0 0); opacity: 0; } }
+        .camera-stage { position: relative; z-index: 3; will-change: transform, opacity; }
 
         /* ========================================
-           STATIC ARCHITECTURE (the grid container)
+           STATIC ARCHITECTURE  (original geometry)
         ======================================== */
-        .primary-architecture-wrapper { 
-            position: relative; z-index: 3; max-width: 1600px; margin: 0 auto; 
-            display: grid; grid-template-columns: 1.3fr 2.2fr 2fr; 
-            padding: 80px 60px; gap: 0px; 
+        .primary-architecture-wrapper {
+            position: relative; z-index: 3; max-width: 1600px; margin: 0 auto;
+            display: grid; grid-template-columns: 1.3fr 2.2fr 2fr;
+            padding: 80px 60px; gap: 0px;
         }
-        .app-header { 
-            grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: flex-start; 
-            padding-bottom: 80px; opacity: 0; 
-            animation: assetRevealFluid 0.9s cubic-bezier(0.25, 1, 0.5, 1) both; animation-delay: 1.5s; 
+        .app-header {
+            grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: flex-start;
+            padding-bottom: 80px; opacity: 0;
+            animation: softRise 0.9s var(--land) both; animation-delay: 0.5s;
         }
+        @keyframes softRise { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: none; } }
         .brand-logo-container { max-width: 340px; height: auto; }
         .brand-logo-img { width: 100%; height: auto; display: block; }
         .app-navigation { display: flex; gap: 0px; align-items: center; padding-top: 10px; padding-right: 15%; }
         .app-navigation-link { font-size: 0.75rem; font-weight: 600; text-decoration: none; color: #000000; letter-spacing: 1.5px; padding: 0 15px; }
         .nav-divider { width: 1px; height: 14px; background-color: #000000; opacity: 0.4; }
-        .structural-line-h1 { 
-            position: absolute; top: 52px; left: 0; width: 514px; height: 14px; z-index: 2; 
-            animation: wipeFromLeft 1.1s cubic-bezier(0.19, 1, 0.22, 1) both; animation-delay: 0s; 
-        }
 
         /* ========================================
-           GALLERY
+           STRUCTURAL LINES  (original images + positions)
+           animation swapped to a soft camera-reveal draw
+        ======================================== */
+        .structural-line-h1 {
+            position: absolute; top: 52px; left: 0; width: 514px; height: 14px; z-index: 2;
+            transform-origin: left center; clip-path: inset(0 100% 0 0);
+            animation: drawRight 1.4s var(--glide) both; animation-delay: 0.2s;
+            will-change: clip-path, transform;
+        }
+        .structural-line-v1 {
+            position: absolute; left: 80px; bottom: 0; width: 14px; height: 80%; z-index: 2;
+            clip-path: inset(100% 0 0 0);
+        }
+        .structural-line-h2 {
+            position: absolute; bottom: 12%; right: 0; width: 72%; height: 14px; z-index: 2;
+            clip-path: inset(0 0 0 100%);
+        }
+        .structural-line-v2 {
+            position: absolute; right: 80px; top: 0; width: 14px; height: 100vh;
+            clip-path: inset(0 0 100% 0);
+        }
+        /* product lines draw in as the camera lands */
+        .product-line.show.structural-line-v1 { animation: drawUp   1.5s var(--glide) 0.15s both; }
+        .product-line.show.structural-line-h2 { animation: drawLeft 1.6s var(--glide) 0.30s both; }
+        .product-line.show.structural-line-v2 { animation: drawDown 1.7s var(--glide) 0.45s both; }
+
+        @keyframes drawRight { from { clip-path: inset(0 100% 0 0); opacity: 0; } 8% { opacity: 1; } to { clip-path: inset(0 0 0 0); opacity: 1; } }
+        @keyframes drawLeft  { from { clip-path: inset(0 0 0 100%); opacity: 0; } 8% { opacity: 1; } to { clip-path: inset(0 0 0 0); opacity: 1; } }
+        @keyframes drawUp    { from { clip-path: inset(100% 0 0 0); opacity: 0; } 8% { opacity: 1; } to { clip-path: inset(0 0 0 0); opacity: 1; } }
+        @keyframes drawDown  { from { clip-path: inset(0 0 100% 0); opacity: 0; } 8% { opacity: 1; } to { clip-path: inset(0 0 0 0); opacity: 1; } }
+
+        /* ========================================
+           GALLERY  (original masonry)
         ======================================== */
         #gallery-wrapper { grid-column: 1 / -1; }
-        .masonry-gallery { 
-            column-count: 4; column-gap: 100px; 
-            padding: 0 80px; margin-top: 20px; 
+        .masonry-gallery {
+            column-count: 4; column-gap: 100px;
+            padding: 0 80px; margin-top: 20px;
         }
-        .gallery-item { 
-            margin-bottom: 50px; break-inside: avoid; opacity: 0; 
-            animation: assetRevealFluid 0.8s ease-out forwards; 
+        .gallery-item {
+            margin-bottom: 50px; break-inside: avoid; opacity: 0;
+            transform: translateY(22px);
+            animation: tileRise 0.9s var(--land) both;
         }
-        .gallery-item img { width: 100%; display: block; transition: 0.4s; }
-        .gallery-item img:hover { transform: scale(1.02); cursor: pointer; }
+        @keyframes tileRise { to { opacity: 1; transform: none; } }
+        .gallery-item img { width: 100%; display: block; transition: transform 0.6s var(--land); }
+        .gallery-item a { display:block; overflow:hidden; }
+        .gallery-item img:hover { transform: scale(1.03); cursor: pointer; }
 
         /* ========================================
-           PRODUCT VIEW STYLES
+           PRODUCT VIEW  (original layout)
         ======================================== */
-        .structural-line-v1 { 
-            position: absolute; left: 80px; bottom: 0; width: 14px; height: 80%; z-index: 2; 
-            animation: wipeFromBottom 1.2s cubic-bezier(0.19, 1, 0.22, 1) both; animation-delay: 0.3s; 
+        .product-hero-facade {
+            grid-column: 1; position: relative; display: flex; align-items: center;
+            padding-left: 50px; padding-right: 20px; height: 480px;
         }
-        .structural-line-h2 { 
-            position: absolute; bottom: 12%; right: 0; width: 72%; height: 14px; z-index: 2; 
-            animation: wipeFromRight 1.4s cubic-bezier(0.19, 1, 0.22, 1) both; animation-delay: 0.6s; 
-        }
-        .structural-line-v2 { 
-            position: absolute; right: 80px; top: 0; width: 14px; height: 100vh; 
-            animation: wipeFromTop 1.5s cubic-bezier(0.25, 1, 0.5, 1) both; animation-delay: 0.9s; 
-        }
-
-        .product-hero-facade { 
-            grid-column: 1; position: relative; display: flex; align-items: center; 
-            padding-left: 50px; padding-right: 20px; height: 480px; 
-        }
-        .glitch-title { 
-            font-size: 3.2rem; font-weight: normal; line-height: 1.15; font-family: Garamond, serif; 
-        }
+        .glitch-title { font-size: 3.2rem; font-weight: normal; line-height: 1.15; font-family: Garamond, serif; }
         .glitch-title .word-box { display: inline-block; white-space: nowrap; }
-        .glitch-title .letter-box { 
-            display: inline-block; opacity: 0; transform: translateY(15px) scaleY(1.2); 
-            animation: typographicGlitchEntrance 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards; 
-        }
+        .glitch-title .letter-box { display:inline-block; opacity:0; transform: translateY(14px);
+            animation: letterGlide 0.7s var(--land) forwards; }
+        @keyframes letterGlide { to { opacity:1; transform:none; } }
 
-        .product-central-gallery { 
-            grid-column: 2; position: relative; display: flex; justify-content: center; align-items: center; 
-            height: 480px; opacity: 0; 
-            animation: assetRevealFluid 1.2s cubic-bezier(0.25, 1, 0.5, 1) both; animation-delay: 1.8s; 
+        .product-central-gallery {
+            grid-column: 2; position: relative; display: flex; justify-content: center; align-items: center;
+            height: 480px;
         }
-        .slider-frame { position: relative; width: 100%; height: 100%; overflow: hidden; }
-        .slider-slide { 
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; 
-            opacity: 0; transition: opacity 0.8s cubic-bezier(0.76, 0, 0.24, 1), 
-                                  transform 0.8s cubic-bezier(0.76, 0, 0.24, 1), 
-                                  clip-path 0.8s cubic-bezier(0.76, 0, 0.24, 1); 
-            transform: scale(0.96) translateX(10px); 
-        }
-        .slider-slide.active { 
-            opacity: 1; transform: scale(1) translateX(0); 
-            clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); z-index: 2; 
-        }
-        .slider-slide.next { 
-            opacity: 0; transform: scale(0.96) translateX(20px); 
-            clip-path: polygon(100% 0, 100% 0, 100% 100%, 100% 100%); z-index: 1; 
-        }
-        .slider-pagination { position: absolute; bottom: -30px; display: flex; gap: 10px; }
-        .dot { width: 30px; height: 2px; background: #ccc; transition: background 0.3s; cursor: pointer; }
-        .dot.active { background: #000; }
+        .slider-frame { position: relative; width: 100%; height: 100%; overflow: hidden; touch-action: pan-y; }
+        .slider-track { display: flex; height: 100%; will-change: transform; }
+        .slider-slide { flex: 0 0 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+        .slider-slide img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+        .slider-pagination { position: absolute; left: 50%; transform: translateX(-50%); bottom: -30px; display: flex; gap: 10px; }
+        .dot { width: 30px; height: 2px; background: #ccc; transition: background 0.3s, transform 0.4s var(--land); cursor: pointer; }
+        .dot.active { background: #000; transform: scaleX(1.1); }
 
-        .product-manifesto-container { 
-            grid-column: 3; position: relative; display: flex; flex-direction: column; justify-content: center; 
-            padding-left: 60px; padding-right: 40px; opacity: 0; 
-            animation: assetRevealFluid 1.0s cubic-bezier(0.25, 1, 0.5, 1) both; animation-delay: 2.1s; 
-            height: 480px; 
+        .product-manifesto-container {
+            grid-column: 3; position: relative; display: flex; flex-direction: column; justify-content: center;
+            padding-left: 60px; padding-right: 40px; height: 480px;
         }
-        .manifesto-body-text { 
-            font-size: 1.25rem; line-height: 1.9; margin-bottom: 45px; color: #1a1a1a; max-width: 380px; 
-        }
+        .manifesto-body-text { font-size: 1.25rem; line-height: 1.9; margin-bottom: 45px; color: #1a1a1a; max-width: 380px; }
         .manifesto-meta-box h4 { font-size: 0.78rem; font-weight: bold; letter-spacing: 2.5px; margin-bottom: 8px; }
         .manifesto-meta-box p { font-size: 0.90rem; color: #444444; }
+        .related-series { margin-top: 35px; }
+        .related-thumbnails { display: flex; gap: 12px; flex-wrap: wrap; }
+        .related-thumbnails a { display:block; width:68px; height:68px; border:1px solid #ddd; overflow:hidden; border-radius:3px; transition: transform 0.5s var(--land); }
+        .related-thumbnails a:hover { transform: translateY(-4px); }
+        .related-thumbnails img { width:100%; height:100%; object-fit:cover; }
+
+        /* product columns fade up as the camera lands */
+        .product-hero-facade, .product-central-gallery, .product-manifesto-container { opacity: 0; }
+        .product.land .product-hero-facade      { animation: colLand 0.9s var(--land) 0.10s both; }
+        .product.land .product-central-gallery  { animation: colLand 1.0s var(--land) 0.20s both; }
+        .product.land .product-manifesto-container { animation: colLand 0.9s var(--land) 0.30s both; }
+        @keyframes colLand { from { opacity:0; transform: translateY(18px); } to { opacity:1; transform:none; } }
+
+        /* product visibility via class — lets the mobile rule win over JS */
+        #product-wrapper { display: none; }
+        #product-wrapper.active { display: contents; }
 
         /* ========================================
-           RESPONSIVE
+           RESPONSIVE  (original breakpoint)
         ======================================== */
-        @media (max-width: 1124px) { 
-            .masonry-gallery { column-count: 2; padding: 0 20px; column-gap: 30px; } 
-            .primary-architecture-wrapper { padding: 40px 24px; display: block; } 
-            .structural-line-h1 { display: none !important; } 
-            .app-navigation { padding-right: 0; } 
-            
-            .product-hero-facade, .product-central-gallery, .product-manifesto-container { padding: 20px 0; } 
-            .product-central-gallery { height: 350px; } 
-            .structural-line-v1, .structural-line-v2, .structural-line-h2 { display: none !important; } 
+        @media (max-width: 1124px) {
+            .masonry-gallery { column-count: 2; padding: 0 20px; column-gap: 30px; }
+            .primary-architecture-wrapper { padding: 40px 24px; display: block; }
+            .structural-line-h1 { display: none !important; }
+            .app-navigation { padding-right: 0; }
+            .product-hero-facade, .product-central-gallery, .product-manifesto-container { padding: 20px 0; height: auto; }
+            .product-central-gallery { height: 60vw; max-height: 360px; }
+            .structural-line-v1, .structural-line-v2, .structural-line-h2 { display: none !important; }
+            #product-wrapper.active { display: block; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * { animation-duration: 0.01ms !important; animation-delay: 0ms !important; transition-duration: 0.15s !important; }
+            .gallery-item, .glitch-title .letter-box,
+            .product-hero-facade, .product-central-gallery, .product-manifesto-container { opacity: 1 !important; transform: none !important; }
+            .blueprint-canvas { transition: none !important; }
         }
     </style>
 </head>
 <body>
 
-    <div class="blueprint-canvas"></div>
-    <img src="images/line-top-left.png" alt="" class="structural-line-h1">
+    <div class="blueprint-canvas" id="canvas"></div>
 
-    <!-- PRODUCT STRUCTURAL LINES - AT BODY LEVEL (exactly like the top line) -->
-    <img src="images/line-bottom-right-h.png" alt="" class="structural-line-h2 product-structural-line" style="display: none;">
-    <img src="images/line-bottom-left-v.png" alt="" class="structural-line-v2 product-structural-line" style="display: none;">
-    <img src="images/line-bottom-left-v.png" alt="" class="structural-line-v1 product-structural-line" style="display: none;">
+    <!-- original structural-line images -->
+    <img src="images/line-top-left.png" alt="" class="structural-line-h1" onerror="this.style.display='none'">
+    <img src="images/line-bottom-right-h.png" alt="" class="structural-line-h2 product-line" style="display:none" onerror="this.dataset.broken=1">
+    <img src="images/line-bottom-left-v.png" alt="" class="structural-line-v2 product-line" style="display:none" onerror="this.dataset.broken=1">
+    <img src="images/line-bottom-left-v.png" alt="" class="structural-line-v1 product-line" style="display:none" onerror="this.dataset.broken=1">
 
-    <div class="primary-architecture-wrapper">
-        
-        <!-- Header always visible -->
-        <header class="app-header">
-            <div class="brand-logo-container">
-                <a href="#"><img src="images/logo.png" alt="Ellia Nattel.K DESIGNER" class="brand-logo-img"></a>
+    <div class="camera-stage" id="stage">
+        <div class="primary-architecture-wrapper">
+
+            <header class="app-header">
+                <div class="brand-logo-container">
+                    <a href="#" id="logo"><img src="images/logo.png" alt="Ellia Nattel.K DESIGNER" class="brand-logo-img" onerror="this.style.display='none'"></a>
+                </div>
+                <nav class="app-navigation">
+                    <a href="#contact" class="app-navigation-link">CONTACT</a>
+                    <div class="nav-divider"></div>
+                    <a href="#about" class="app-navigation-link">ABOUT</a>
+                </nav>
+            </header>
+
+            <!-- GALLERY -->
+            <div id="gallery-wrapper" style="grid-column: 1 / -1;">
+                <main id="gallery-view" class="masonry-gallery"></main>
             </div>
-            <nav class="app-navigation">
-                <a href="#contact" class="app-navigation-link">CONTACT</a>
-                <div class="nav-divider"></div>
-                <a href="#about" class="app-navigation-link">ABOUT</a>
-            </nav>
-        </header>
 
-        <!-- GALLERY -->
-        <div id="gallery-wrapper" style="grid-column: 1 / -1;">
-            <main id="gallery-view" class="masonry-gallery"></main>
+            <!-- PRODUCT VIEW -->
+            <div id="product-wrapper" class="product" style="grid-column: 1 / -1;">
+                <section class="product-hero-facade">
+                    <h2 class="glitch-title" id="p-title">Folded Asymmetric Earrings</h2>
+                </section>
+                <section class="product-central-gallery">
+                    <div class="slider-frame" id="frame"><div class="slider-track" id="track"></div></div>
+                    <div class="slider-pagination" id="pager"></div>
+                </section>
+                <section class="product-manifesto-container">
+                    <p class="manifesto-body-text" id="p-body"></p>
+                    <div class="manifesto-meta-box">
+                        <h4>MATERIALS :</h4>
+                        <p id="p-materials"></p>
+                    </div>
+                    <div class="related-series" id="same-series" style="display:none;">
+                        <h4 style="font-size:0.78rem; font-weight:bold; letter-spacing:2.5px; margin-bottom:12px;">SAME SERIES</h4>
+                        <div class="related-thumbnails" id="thumbs"></div>
+                    </div>
+                </section>
+            </div>
+
         </div>
-
-        <!-- PRODUCT WRAPPER (only content sections) -->
-        <div id="product-wrapper" style="display: none; grid-column: 1 / -1;">
-            
-            <section class="product-hero-facade">
-                <h2 class="glitch-title">Folded Asymmetric Earrings</h2>
-            </section>
-
-            <section class="product-central-gallery">
-                <div class="slider-frame" id="slider">
-                    <img src="images/product-showcase-1.png" alt="Angle 1" class="slider-slide active">
-                    <img src="images/product-showcase-2.png" alt="Angle 2" class="slider-slide next">
-                </div>
-                <div class="slider-pagination">
-                    <span class="dot active"></span>
-                    <span class="dot"></span>
-                </div>
-            </section>
-
-            <section class="product-manifesto-container">
-                <p class="manifesto-body-text">
-                    Hand-sculpted folded earrings. Each earring consists of two interlocking parts — front and back — creating a complex three-dimensional form.
-                </p>
-                <div class="manifesto-meta-box">
-                    <h4>MATERIALS :</h4>
-                    <p>925 Sterling silver</p>
-                </div>
-            </section>
-        </div>
-
     </div>
 
     <script>
-        function initGallery() {
-            const gallery = document.getElementById('gallery-view');
-            if (!gallery) return;
-            
-            gallery.innerHTML = '';
-            const baseGalleryDelay = 0.2;
-            const totalImages = 8;
-            
-            for (let i = 1; i <= totalImages; i++) {
-                const div = document.createElement('div');
-                div.className = 'gallery-item';
-                const delay = (baseGalleryDelay + (i * 0.15)).toFixed(2);
-                div.style.animationDelay = `${delay}s`;
-                
-                const link = document.createElement('a');
-                link.href = '#';
-                link.innerHTML = `<img src="images/${i}.png" alt="Product ${i}">`;
-                
-                link.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    showProductView();
-                });
-                
-                div.appendChild(link);
-                gallery.appendChild(div);
-            }
-        }
+    /* ================= DATA (unchanged from original) ================= */
+    const products = [
+        { id: 1, title: "Interwoven Link Necklace", description: "Intricately interwoven rectangular links form a sculptural geometric statement necklace with rich depth and natural movement.", materials: "Brass", images: ["1.png", "1-1.png", "1-2.png"], related: ["1-a", "1-b"] },
+        { id: 2, title: "Folded Asymmetric Earrings", description: "Hand-sculpted folded earrings. Each earring consists of two interlocking parts — front and back — creating a complex three dimensional form.", materials: "925 Sterling silver", images: ["2.png", "2-1.png"], related: ["2-a", "2-b"] },
+        { id: 3, title: "Branch Drop Earrings", description: "An abstract interpretation of a branch with leaves — these long silver drop earrings feature a delicate linear structure with refined sculptural detail.", materials: "925 Sterling silver, oxidized", images: ["3.png", "3-1.png"] },
+        { id: 4, title: "Interwoven Link Necklace", description: "Intricately interwoven rectangular links form a sculptural geometric statement necklace with rich depth and natural movement.", materials: "Brass", images: ["4.png", "4-1.png"] },
+        { id: 5, title: "Folded Contour Earrings", description: "Hand folded rectangular contours create an interesting three-dimensional geometric form with a modern silhouette.", materials: "Brass/925 Sterling silver, oxidized", images: ["5.png", "5-1.png"] },
+        { id: 7, title: "Tangled Ring", description: "Handcrafted ring with an organic, interwoven structure.", materials: "blackened brass", images: ["7.png", "7-1.png", "7-2.png"] },
+        { id: 8, title: "Sculpted contours", description: "Hand sculpted, free form contours earrings. Model No. 5 (small)", materials: "925 Sterling silver", images: ["8.png", "8-1.png"] },
+        { id: 9, title: "Sculpted contours", description: "Hand sculpted, free form contours earrings. Model No. 5 (small)", materials: "925 Sterling silver", images: ["9.png", "9-1.png"] },
+        { id: 10, title: "Wild Stone Ring", description: "Handcrafted ring set with a natural black stone found in the wild, featuring a white vein across it. The surface was gently polished to highlight its natural pattern.", materials: "925 Sterling silver, Natural stone", images: ["10.png", "10-1.png"] },
+        { id: 11, title: "Acer Seed Earrings", description: "Inspired by Acer (maple) seeds, these handcrafted earrings present a structured geometric interpretation of the natural form. Asymmetric pair.", materials: "Brass", images: ["11.png", "11-1.png"] },
+        { id: 12, title: "Wire Sketch Earrings", description: "Handcrafted geometric frames made from flattened metal wire. These earrings create a large-volume, three-dimensional sketch-like appearance while remaining surprisingly lightweight.", materials: "925 Sterling silver, oxidized", images: ["12.png", "12-1.png"] },
+        { id: 13, title: "Folded Heart Ring", description: "Handcrafted brass ring featuring a geometric folded heart. The sculptural form creates a bold yet minimal statement with a modern edge.", materials: "Brass", images: ["13.png", "13-1.png", "13-2.png"] },
+        { id: 14, title: "Geometric Link Necklace", description: "Bold architectural rectangular links with unique pivoting connections create a sculptural yet fluid silhouette. This modern piece blends minimalist elegance with strong geometric presence.", materials: "Oxidized Brass", images: ["14.png", "14-1.png"] },
+        { id: 15, title: "Geometric Link Necklace", description: "Bold architectural rectangular links with unique pivoting connections create a sculptural yet fluid silhouette. This modern piece blends minimalist elegance with strong geometric presence.", materials: "Oxidized Brass", images: ["15.png", "15-1.png"] },
+        { id: 16, title: "Layered Rectangle Earrings", description: "Handcrafted brass earrings with layered rectangular forms. Elongated geometric structure with clean modern lines.", materials: "Brass", images: ["16.png", "16-1.png"] },
+        { id: 17, title: "Sculpted contours", description: "Hand sculpted, free form contours earrings. Model No. 6 (small)", materials: "blackened brass", images: ["17.png", "17-1.png", "17-2.png"] },
+        { id: "1-a", title: "Sculpted contours", description: "Hand sculpted, free form contours ring Model No. 2 (medium)", materials: "925 Sterling silver", images: ["1-a.png", "1-a-1.png", "1-a-2.png"], related: [1] },
+        { id: "1-b", title: "Sculpted contours", description: "Hand sculpted, free form contours ring Model No. 4 (small)", materials: "925 Sterling silver", images: ["1-b.png", "1-b-1.png", "1-b-2.png"], related: [1] },
+        { id: "2-a", title: "Folded Asymmetric Earrings", description: "Hand-sculpted folded earrings. Each earring consists of two interlocking parts — front and back — creating a complex three dimensional form.", materials: "brass", images: ["2-a.png"], related: [2] },
+        { id: "2-b", title: "Folded Asymmetric Earrings", description: "Hand-sculpted folded earrings. Each earring consists of two interlocking parts — front and back — creating a complex three dimensional form.", materials: "brass", images: ["2-b.png"], related: [2] }
+    ];
 
-        function restartProductAnimations() {
-            const productWrapper = document.getElementById('product-wrapper');
-            if (!productWrapper) return;
+    const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-            const animatedElements = productWrapper.querySelectorAll(
-                '.product-hero-facade, .product-central-gallery, .product-manifesto-container'
-            );
+    const galleryWrap = document.getElementById('gallery-wrapper');
+    const productWrap  = document.getElementById('product-wrapper');
+    const stage        = document.getElementById('stage');
+    const canvas       = document.getElementById('canvas');
+    let view = 'gallery';
+    const killStageAnims = () => { try { stage.getAnimations().forEach(a => a.cancel()); } catch(e){} };
 
-            animatedElements.forEach(el => {
-                el.style.animation = 'none';
-                void el.offsetWidth;
-                el.style.animation = '';
-            });
-        }
-
-        function restartStructuralLines() {
-            document.querySelectorAll('.product-structural-line').forEach(line => {
-                line.style.animation = 'none';
-                void line.offsetWidth;
-                line.style.animation = '';
-            });
-        }
-
-        let productAutoTimeout = null;
-        let productClickHandler = null;
-
-        function initProductScripts() {
-            const textTargets = document.querySelectorAll(".glitch-title");
-            textTargets.forEach(target => {
-                const rawText = target.textContent.trim();
-                if (!rawText) return;
-                
-                target.textContent = "";
-                const wordsArray = rawText.split(" ");
-                const baseTextDelay = 0.5;
-
-                wordsArray.forEach((word, wordIndex) => {
-                    const wordSpan = document.createElement("span");
-                    wordSpan.classList.add("word-box");
-
-                    for (let i = 0; i < word.length; i++) {
-                        const letterSpan = document.createElement("span");
-                        letterSpan.classList.add("letter-box");
-                        letterSpan.textContent = word[i];
-                        const randomDelay = (baseTextDelay + Math.random() * 0.65).toFixed(3);
-                        letterSpan.style.animationDelay = `${randomDelay}s`;
-                        wordSpan.appendChild(letterSpan);
-                    }
-                    target.appendChild(wordSpan);
-                    if (wordIndex < wordsArray.length - 1) {
-                        target.appendChild(document.createTextNode(" "));
-                    }
-                });
-            });
-
-            const slider = document.getElementById("slider");
-            if (!slider) return;
-
-            if (productAutoTimeout) {
-                clearTimeout(productAutoTimeout);
-                productAutoTimeout = null;
-            }
-            if (productClickHandler) {
-                slider.removeEventListener("click", productClickHandler);
-                productClickHandler = null;
-            }
-
-            const slides = document.querySelectorAll(".slider-slide");
-            const dots = document.querySelectorAll(".dot");
-            let currentSlideIndex = 0;
-            let isAutoPlayed = false;
-
-            window.updateSlider = function(index) {
-                if (!slides[currentSlideIndex] || !slides[index]) return;
-                
-                slides[currentSlideIndex].classList.remove("active");
-                slides[currentSlideIndex].classList.add("next");
-                dots[currentSlideIndex].classList.remove("active");
-
-                currentSlideIndex = index;
-
-                slides[currentSlideIndex].classList.add("active");
-                slides[currentSlideIndex].classList.remove("next");
-                dots[currentSlideIndex].classList.add("active");
-            };
-
-            productClickHandler = () => {
-                isAutoPlayed = true;
-                const nextIndex = currentSlideIndex === 0 ? 1 : 0;
-                window.updateSlider(nextIndex);
-            };
-            slider.addEventListener("click", productClickHandler);
-
-            productAutoTimeout = setTimeout(() => {
-                if (!isAutoPlayed && slides.length > 1) {
-                    window.updateSlider(1);
-                    isAutoPlayed = true;
-                }
-            }, 2500);
-        }
-
-        function showProductView() {
-            const galleryWrapper = document.getElementById('gallery-wrapper');
-            const productWrapper = document.getElementById('product-wrapper');
-            if (!galleryWrapper || !productWrapper) return;
-
-            galleryWrapper.style.animation = 'fadeOut 0.5s forwards';
-
-            setTimeout(() => {
-                galleryWrapper.style.display = 'none';
-                galleryWrapper.style.animation = '';
-
-                productWrapper.style.display = 'contents';
-
-                // Show the structural lines (they are now at root level)
-                document.querySelectorAll('.product-structural-line').forEach(line => {
-                    line.style.display = 'block';
-                });
-
-                restartProductAnimations();
-                restartStructuralLines();
-                initProductScripts();
-            }, 500);
-        }
-
-        function showGalleryView() {
-            const galleryWrapper = document.getElementById('gallery-wrapper');
-            const productWrapper = document.getElementById('product-wrapper');
-            if (!galleryWrapper || !productWrapper) return;
-
-            if (productAutoTimeout) {
-                clearTimeout(productAutoTimeout);
-                productAutoTimeout = null;
-            }
-
-            // Manually trigger fadeOut exit on the three sections (reliable even with display:contents)
-            const sections = productWrapper.querySelectorAll(
-                '.product-hero-facade, .product-central-gallery, .product-manifesto-container'
-            );
-            sections.forEach(section => {
-                section.style.animation = 'none';
-                void section.offsetWidth; // force reflow so animation restarts
-                section.style.animation = 'fadeOut 0.4s forwards';
-            });
-
-            // WIPE OUT on the structural lines (they are at body level)
-            const lineH2 = document.querySelector('.structural-line-h2.product-structural-line');
-            const lineV2 = document.querySelector('.structural-line-v2.product-structural-line');
-            const lineV1 = document.querySelector('.structural-line-v1.product-structural-line');
-
-            if (lineH2) lineH2.style.animation = 'wipeOutToRight 0.45s forwards';
-            if (lineV2) lineV2.style.animation = 'wipeOutToTop 0.45s forwards';
-            if (lineV1) lineV1.style.animation = 'wipeOutToBottom 0.45s forwards';
-
-            setTimeout(() => {
-                productWrapper.style.display = 'none';
-
-                // Hide lines
-                if (lineH2) { lineH2.style.display = 'none'; lineH2.style.animation = ''; }
-                if (lineV2) { lineV2.style.display = 'none'; lineV2.style.animation = ''; }
-                if (lineV1) { lineV1.style.display = 'none'; lineV1.style.animation = ''; }
-
-                // Reset sections for next time
-                sections.forEach(section => section.style.animation = '');
-
-                galleryWrapper.style.display = 'block';
-            }, 450);
-        }
-
-        function initLogoHandler() {
-            const logoLink = document.querySelector('.brand-logo-container a');
-            if (!logoLink) return;
-
-            logoLink.addEventListener('click', (e) => {
-                const productWrapper = document.getElementById('product-wrapper');
-                const isProductActive = productWrapper && productWrapper.style.display === 'contents';
-
-                if (isProductActive) {
-                    e.preventDefault();
-                    showGalleryView();
-                }
-            });
-        }
-
-        document.addEventListener("DOMContentLoaded", () => {
-            initGallery();
-            initLogoHandler();
+    /* ================= GALLERY ================= */
+    function initGallery(){
+        const gallery = document.getElementById('gallery-view');
+        gallery.innerHTML = '';
+        let n = 0;
+        products.forEach(p => {
+            if (typeof p.id !== 'number') return;
+            const div = document.createElement('div');
+            div.className = 'gallery-item';
+            div.style.animationDelay = (0.2 + (++n) * 0.07).toFixed(2) + 's';
+            const a = document.createElement('a'); a.href = '#';
+            const img = document.createElement('img');
+            img.src = `images/${p.id}.png`; img.alt = p.title; img.loading = 'lazy';
+            img.onerror = () => { img.onerror = null; a.style.minHeight = '160px';
+                a.style.background = 'repeating-linear-gradient(45deg,#fafafa,#fafafa 8px,#f1f1f1 8px,#f1f1f1 16px)'; img.remove(); };
+            a.appendChild(img); div.appendChild(a); gallery.appendChild(div);
+            a.addEventListener('click', e => { e.preventDefault(); cameraToProduct(p.id, a); });
         });
+    }
+
+    /* ================= CAMERA: GALLERY → PRODUCT =================
+       Dive into the clicked piece, then land on the product laid
+       out elsewhere on the drafting sheet. Grid + lines parallax. */
+    function cameraToProduct(id, sourceEl){
+        const product = products.find(p => p.id === id);
+        if (!product || view !== 'gallery') return;
+        view = 'animating';
+
+        if (REDUCED){ swapToProduct(product); return; }
+        killStageAnims();
+
+        // origin = the clicked tile, in stage-local coordinates
+        let r = sourceEl ? sourceEl.getBoundingClientRect() : null;
+        if (!r || (r.width === 0 && r.height === 0)) {   // detached/empty → dive from viewport centre
+            r = { left: window.innerWidth/2 - 80, top: window.innerHeight/2 - 80, width: 160, height: 160 };
+        }
+        const s = stage.getBoundingClientRect();
+        const ox = (r.left + r.width/2)  - s.left;
+        const oy = (r.top  + r.height/2) - s.top;
+        stage.style.transformOrigin = `${ox}px ${oy}px`;
+
+        // directional drift so the camera also travels sideways across the sheet
+        const dx = (window.innerWidth/2  - (r.left + r.width/2)) * 0.12;
+        const dy = (window.innerHeight/2 - (r.top + r.height/2)) * 0.12;
+        canvas.style.transform = `translate(${dx*1.6}px, ${dy*1.6}px) scale(1.06)`;
+
+        stage.animate([
+            { transform: 'scale(1) translate(0,0)', opacity: 1 },
+            { transform: `scale(2.1) translate(${dx}px, ${dy}px)`, opacity: 0 }
+        ], { duration: 620, easing: getComputedStyle(document.documentElement).getPropertyValue('--dive').trim() || 'cubic-bezier(0.7,0,0.84,0)', fill: 'forwards' })
+        .finished.then(() => landOnProduct(product)).catch(() => landOnProduct(product));
+    }
+
+    function landOnProduct(product){
+        swapContent(product);
+        galleryWrap.style.display = 'none';
+        productWrap.classList.add('active');
+        showLines(true);
+        window.scrollTo({ top: 0 });
+
+        // camera arrives: pull from a slight push-in back to rest
+        stage.style.transformOrigin = '50% 30%';
+        canvas.style.transform = 'translate(0,0) scale(1)';
+        stage.animate([
+            { transform: 'scale(1.12)', opacity: 0 },
+            { transform: 'scale(1)',    opacity: 1 }
+        ], { duration: 760, easing: 'cubic-bezier(0.16,1,0.3,1)', fill: 'forwards' })
+        .finished.then(() => { stage.style.transform=''; stage.style.transformOrigin=''; view = 'product'; })
+        .catch(() => { view = 'product'; });
+
+        // replay the column / letter / line reveals
+        productWrap.classList.remove('land'); void productWrap.offsetWidth; productWrap.classList.add('land');
+    }
+
+    function swapToProduct(product){           // reduced-motion path
+        swapContent(product);
+        galleryWrap.style.display = 'none';
+        productWrap.classList.add('active');
+        showLines(true);
+        window.scrollTo({ top: 0 });
+        view = 'product';
+    }
+
+    /* fill all product fields + slider + same-series + animated title */
+    function swapContent(product){
+        setTitle(product.title);
+        document.getElementById('p-body').textContent = product.description;
+        document.getElementById('p-materials').textContent = product.materials;
+        buildSlider(product);
+        buildSameSeries(product);
+    }
+
+    function setTitle(text){
+        const t = document.getElementById('p-title');
+        t.innerHTML = '';
+        let i = 0;
+        const words = text.split(' ');
+        words.forEach((word, wi) => {
+            const wb = document.createElement('span');
+            wb.className = 'word-box';
+            [...word].forEach(ch => {
+                const span = document.createElement('span');
+                span.className = 'letter-box';
+                span.textContent = ch;
+                span.style.animationDelay = (0.2 + (i++) * 0.03).toFixed(3) + 's';
+                wb.appendChild(span);
+            });
+            t.appendChild(wb);
+            if (wi < words.length - 1) t.appendChild(document.createTextNode(' '));
+        });
+    }
+
+    /* ================= CAMERA: PRODUCT → GALLERY ================= */
+    function cameraToGallery(){
+        if (view !== 'product') return;
+        view = 'animating';
+        stopAuto();
+        showLines(false);
+
+        const done = () => {
+            productWrap.classList.remove('active');
+            productWrap.classList.remove('land');
+            galleryWrap.style.display = 'block';
+            stage.style.transform=''; stage.style.transformOrigin='';
+            canvas.style.transform = 'translate(0,0) scale(1)';
+            window.scrollTo({ top: 0 });
+            view = 'gallery';
+        };
+
+        if (REDUCED){ done(); return; }
+        killStageAnims();
+
+        // EXIT = reverse of the dive: camera pulls BACK (zoom-out).
+        // The product recedes/shrinks away, then the whole gallery is
+        // revealed by pulling back from an over-zoomed state to rest.
+        stage.style.transformOrigin = '50% 35%';
+        canvas.style.transform = 'scale(0.97)';              // grid recedes slightly
+        stage.animate([
+            { transform: 'scale(1)',    opacity: 1 },
+            { transform: 'scale(0.82)', opacity: 0 }
+        ], { duration: 480, easing: 'cubic-bezier(0.65,0,0.35,1)', fill: 'forwards' })
+        .finished.then(() => {
+            done();                                          // resets canvas to scale(1) — grid settles back
+            stage.style.transformOrigin = '50% 35%';
+            stage.animate([
+                { transform: 'scale(1.22)', opacity: 0 },    // gallery starts over-zoomed…
+                { transform: 'scale(1)',    opacity: 1 }     // …and pulls back to the full view
+            ], { duration: 700, easing: 'cubic-bezier(0.16,1,0.3,1)', fill: 'forwards' })
+            .finished.then(()=>{ stage.style.transform=''; stage.style.transformOrigin=''; }).catch(()=>{});
+        }).catch(done);
+    }
+
+    /* ================= STRUCTURAL LINES ================= */
+    function showLines(show){
+        document.querySelectorAll('.product-line').forEach(l => {
+            l.classList.remove('show');
+            l.style.display = show && !l.dataset.broken ? 'block' : 'none';
+            void l.offsetWidth;
+            if (show) l.classList.add('show');
+        });
+    }
+
+    /* ================= SLIDER (drag + momentum + autoplay) ================= */
+    const frame = document.getElementById('frame');
+    const track = document.getElementById('track');
+    const pager = document.getElementById('pager');
+    let slides = [], dots = [], index = 0, auto = null;
+
+    function buildSlider(product){
+        track.innerHTML = ''; pager.innerHTML = ''; index = 0;
+        (product.images || []).forEach((name,i) => {
+            const slide = document.createElement('div'); slide.className = 'slider-slide';
+            const img = document.createElement('img'); img.src = `images/${name}`; img.alt = `${product.title} ${i+1}`;
+            img.onerror = () => { img.onerror = null; img.style.visibility = 'hidden'; };
+            slide.appendChild(img); track.appendChild(slide);
+            const dot = document.createElement('span'); dot.className = 'dot' + (i===0?' active':'');
+            dot.addEventListener('click', () => { stopAuto(); goTo(i,true); startAuto(); });
+            pager.appendChild(dot);
+        });
+        slides = [...track.querySelectorAll('.slider-slide')];
+        dots = [...pager.querySelectorAll('.dot')];
+        pager.style.display = slides.length > 1 ? 'flex' : 'none';
+        setTrack(0,false);
+        startAuto();
+    }
+    function setTrack(px, animate){
+        track.style.transition = animate ? 'transform 0.7s var(--land)' : 'none';
+        track.style.transform = `translate3d(${px}px,0,0)`;
+    }
+    function goTo(i, animate){
+        index = Math.max(0, Math.min(i, slides.length-1));
+        setTrack(-index * frame.clientWidth, animate);
+        dots.forEach((d,di) => d.classList.toggle('active', di===index));
+    }
+    let drag=false, startX=0, basePx=0, lastX=0, lastT=0, vx=0;
+    frame.addEventListener('pointerdown', e => {
+        if (slides.length < 2) return;
+        drag = true; stopAuto();
+        startX = lastX = e.clientX; lastT = performance.now(); vx = 0;
+        basePx = -index * frame.clientWidth;
+        track.style.transition = 'none';
+        frame.setPointerCapture(e.pointerId);
+    });
+    frame.addEventListener('pointermove', e => {
+        if (!drag) return;
+        let pos = basePx + (e.clientX - startX);
+        const max = 0, min = -(slides.length-1) * frame.clientWidth;
+        if (pos > max) pos = max + (pos-max)*0.35;
+        if (pos < min) pos = min + (pos-min)*0.35;
+        setTrack(pos, false);
+        const now = performance.now(), dt = now - lastT;
+        if (dt > 0) vx = (e.clientX - lastX) / dt;   // px/ms of the latest move
+        lastX = e.clientX; lastT = now;
+    });
+    function endDrag(e){
+        if (!drag) return; drag = false;
+        const dx = e.clientX - startX;
+        const v = vx;
+        const w = frame.clientWidth;
+        let target = index;
+        if (dx < -w*0.18 || v < -0.45) target = index + 1;
+        else if (dx > w*0.18 || v > 0.45) target = index - 1;
+        goTo(target, true); startAuto();
+    }
+    frame.addEventListener('pointerup', endDrag);
+    frame.addEventListener('pointercancel', endDrag);
+    window.addEventListener('resize', () => { if (view==='product') setTrack(-index*frame.clientWidth, false); });
+    function startAuto(){ stopAuto(); if (REDUCED || slides.length < 2) return; auto = setInterval(() => goTo((index+1)%slides.length, true), 3000); }
+    function stopAuto(){ if (auto){ clearInterval(auto); auto = null; } }
+
+    /* ================= SAME SERIES ================= */
+    function buildSameSeries(product){
+        const wrap = document.getElementById('same-series');
+        const thumbs = document.getElementById('thumbs');
+        thumbs.innerHTML = '';
+        const rel = (product.related || []).map(id => products.find(p => p.id === id)).filter(Boolean);
+        if (!rel.length){ wrap.style.display = 'none'; return; }
+        rel.forEach(rp => {
+            const a = document.createElement('a'); a.href = '#';
+            const img = document.createElement('img');
+            img.src = `images/${rp.id}_thumb.png`; img.alt = rp.title;
+            img.onerror = () => { img.onerror=null; img.src = `images/${(rp.images&&rp.images[0])||rp.id+'.png'}`; };
+            a.appendChild(img);
+            a.addEventListener('click', e => { e.preventDefault(); relatedJump(rp.id); });
+            thumbs.appendChild(a);
+        });
+        wrap.style.display = 'block';
+    }
+    /* product → related product: a quick light glide (not the full dive) */
+    function relatedJump(id){
+        if (view !== 'product') return;
+        const product = products.find(p => p.id === id); if (!product) return;
+        view = 'animating';
+        stopAuto();
+        if (REDUCED){ swapContent(product); showLines(true); window.scrollTo({ top: 0 }); view = 'product'; return; }
+        killStageAnims();
+        stage.style.transformOrigin = '50% 35%';
+        stage.animate([{opacity:1, transform:'scale(1)'},{opacity:0, transform:'scale(1.06)'}],
+            {duration:300, easing:'cubic-bezier(0.65,0,0.35,1)', fill:'forwards'})
+        .finished.then(() => {
+            swapContent(product); showLines(true);
+            productWrap.classList.remove('land'); void productWrap.offsetWidth; productWrap.classList.add('land');
+            stage.animate([{opacity:0, transform:'scale(0.97)'},{opacity:1, transform:'scale(1)'}],
+                {duration:520, easing:'cubic-bezier(0.16,1,0.3,1)', fill:'forwards'})
+            .finished.then(()=>{ stage.style.transform=''; stage.style.transformOrigin=''; view = 'product'; }).catch(()=>{ view = 'product'; });
+            window.scrollTo({ top: 0 });
+        }).catch(()=>{ view = 'product'; });
+    }
+
+    /* ================= LOGO → HOME + scroll parallax ================= */
+    document.getElementById('logo').addEventListener('click', e => {
+        if (view === 'product' || view === 'animating'){ e.preventDefault(); cameraToGallery(); }
+    });
+    if (!REDUCED){
+        let ticking = false;
+        window.addEventListener('scroll', () => {
+            if (ticking) return; ticking = true;
+            requestAnimationFrame(() => {
+                if (view === 'gallery') canvas.style.transform = `translateY(${window.scrollY * 0.05}px)`;
+                ticking = false;
+            });
+        }, { passive: true });
+    }
+
+    document.addEventListener('DOMContentLoaded', initGallery);
     </script>
 </body>
 </html>
