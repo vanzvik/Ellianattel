@@ -127,7 +127,7 @@
         .slider-slide { flex: 0 0 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
         .slider-slide img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
         .slider-pagination { position: absolute; left: 50%; transform: translateX(-50%); bottom: -30px; display: flex; gap: 10px; }
-        .dot { width: 30px; height: 2px; background: #ccc; transition: background 0.3s, transform 0.4s var(--land); cursor: pointer; }
+        .dot { position: relative; width: 30px; height: 2px; background: #ccc; transition: background 0.3s, transform 0.4s var(--land); cursor: pointer; }
         .dot.active { background: #000; transform: scaleX(1.1); }
 
         .product-manifesto-container {
@@ -166,6 +166,36 @@
             .product-central-gallery { height: 60vw; max-height: 360px; }
             .structural-line-v1, .structural-line-v2, .structural-line-h2 { display: none !important; }
             #product-wrapper.active { display: block; }
+        }
+
+        /* ========================================
+           PHONE  (single-column, touch-tuned)
+        ======================================== */
+        @media (max-width: 760px) {
+            .primary-architecture-wrapper { padding: 26px 16px 70px; }
+
+            /* header keeps CONTACT | ABOUT but fits a 320px viewport */
+            .app-header { padding-bottom: 40px; align-items: center; }
+            .brand-logo-container { max-width: min(200px, 48vw); }
+            .app-navigation { padding-top: 0; }
+            .app-navigation-link { display: inline-flex; align-items: center; min-height: 44px;
+                font-size: 0.72rem; padding: 0 10px; letter-spacing: 1px; }
+
+            /* gallery: one large image per row */
+            .masonry-gallery { column-count: 1; column-gap: 0; padding: 0 4px; margin-top: 8px; }
+            .gallery-item { margin-bottom: 34px; }
+
+            /* product: stacked, comfortable reading sizes */
+            .glitch-title { font-size: 2.1rem; line-height: 1.18; }
+            .product-hero-facade { padding: 4px 4px 0; }
+            .product-central-gallery { height: 82vw; max-height: 420px; padding: 8px 0 28px; }
+            .product-manifesto-container { padding: 8px 4px 0; }
+            .manifesto-body-text { font-size: 1.1rem; line-height: 1.8; margin-bottom: 32px; max-width: none; }
+
+            /* larger, invisible tap area for the thin pager dots (~44px) */
+            .slider-pagination { bottom: 4px; gap: 14px; }
+            .dot { height: 3px; }
+            .dot::after { content: ""; position: absolute; inset: -21px -8px; }
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -264,6 +294,13 @@
     let view = 'gallery';
     const killStageAnims = () => { try { stage.getAnimations().forEach(a => a.cancel()); } catch(e){} };
 
+    /* camera intensity — lighter/faster on phones for smooth 60fps on weak GPUs.
+       Snapshot once per transition (see callers) so a mid-transition rotation stays consistent. */
+    const isPhone = () => window.matchMedia('(max-width: 760px)').matches;
+    const camVals = () => isPhone()
+        ? { dive: 1.5, land: 1.08, recede: 0.9,  pull: 1.1,  drift: 0.06 }
+        : { dive: 2.1, land: 1.12, recede: 0.82, pull: 1.22, drift: 0.12 };
+
     /* ================= GALLERY ================= */
     function initGallery(){
         const gallery = document.getElementById('gallery-view');
@@ -294,6 +331,7 @@
 
         if (REDUCED){ swapToProduct(product); return; }
         killStageAnims();
+        const cam = camVals();
 
         // origin = the clicked tile, in stage-local coordinates
         let r = sourceEl ? sourceEl.getBoundingClientRect() : null;
@@ -306,18 +344,18 @@
         stage.style.transformOrigin = `${ox}px ${oy}px`;
 
         // directional drift so the camera also travels sideways across the sheet
-        const dx = (window.innerWidth/2  - (r.left + r.width/2)) * 0.12;
-        const dy = (window.innerHeight/2 - (r.top + r.height/2)) * 0.12;
+        const dx = (window.innerWidth/2  - (r.left + r.width/2)) * cam.drift;
+        const dy = (window.innerHeight/2 - (r.top + r.height/2)) * cam.drift;
         canvas.style.transform = `translate(${dx*1.6}px, ${dy*1.6}px) scale(1.06)`;
 
         stage.animate([
             { transform: 'scale(1) translate(0,0)', opacity: 1 },
-            { transform: `scale(2.1) translate(${dx}px, ${dy}px)`, opacity: 0 }
+            { transform: `scale(${cam.dive}) translate(${dx}px, ${dy}px)`, opacity: 0 }
         ], { duration: 620, easing: getComputedStyle(document.documentElement).getPropertyValue('--dive').trim() || 'cubic-bezier(0.7,0,0.84,0)', fill: 'forwards' })
-        .finished.then(() => landOnProduct(product)).catch(() => landOnProduct(product));
+        .finished.then(() => landOnProduct(product, cam)).catch(() => landOnProduct(product, cam));
     }
 
-    function landOnProduct(product){
+    function landOnProduct(product, cam = camVals()){
         swapContent(product);
         galleryWrap.style.display = 'none';
         productWrap.classList.add('active');
@@ -328,8 +366,8 @@
         stage.style.transformOrigin = '50% 30%';
         canvas.style.transform = 'translate(0,0) scale(1)';
         stage.animate([
-            { transform: 'scale(1.12)', opacity: 0 },
-            { transform: 'scale(1)',    opacity: 1 }
+            { transform: `scale(${cam.land})`, opacity: 0 },
+            { transform: 'scale(1)',           opacity: 1 }
         ], { duration: 760, easing: 'cubic-bezier(0.16,1,0.3,1)', fill: 'forwards' })
         .finished.then(() => { stage.style.transform=''; stage.style.transformOrigin=''; view = 'product'; })
         .catch(() => { view = 'product'; });
@@ -342,6 +380,7 @@
         swapContent(product);
         galleryWrap.style.display = 'none';
         productWrap.classList.add('active');
+        productWrap.classList.add('land');     // defensive: reveal columns even if the reduced-motion CSS is inactive
         showLines(true);
         window.scrollTo({ top: 0 });
         view = 'product';
@@ -395,6 +434,7 @@
 
         if (REDUCED){ done(); return; }
         killStageAnims();
+        const cam = camVals();
 
         // EXIT = reverse of the dive: camera pulls BACK (zoom-out).
         // The product recedes/shrinks away, then the whole gallery is
@@ -402,15 +442,15 @@
         stage.style.transformOrigin = '50% 35%';
         canvas.style.transform = 'scale(0.97)';              // grid recedes slightly
         stage.animate([
-            { transform: 'scale(1)',    opacity: 1 },
-            { transform: 'scale(0.82)', opacity: 0 }
+            { transform: 'scale(1)',              opacity: 1 },
+            { transform: `scale(${cam.recede})`,  opacity: 0 }
         ], { duration: 480, easing: 'cubic-bezier(0.65,0,0.35,1)', fill: 'forwards' })
         .finished.then(() => {
             done();                                          // resets canvas to scale(1) — grid settles back
             stage.style.transformOrigin = '50% 35%';
             stage.animate([
-                { transform: 'scale(1.22)', opacity: 0 },    // gallery starts over-zoomed…
-                { transform: 'scale(1)',    opacity: 1 }     // …and pulls back to the full view
+                { transform: `scale(${cam.pull})`, opacity: 0 },   // gallery starts over-zoomed…
+                { transform: 'scale(1)',           opacity: 1 }    // …and pulls back to the full view
             ], { duration: 700, easing: 'cubic-bezier(0.16,1,0.3,1)', fill: 'forwards' })
             .finished.then(()=>{ stage.style.transform=''; stage.style.transformOrigin=''; }).catch(()=>{});
         }).catch(done);
