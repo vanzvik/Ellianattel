@@ -2,6 +2,9 @@ waitlist.jsonl
 index.html.checkpoint*
 devserver.py
 start-server.bat
+.env
+.env.*
+!.env.example
 __pycache__/
 *.pyc
 .DS_Store

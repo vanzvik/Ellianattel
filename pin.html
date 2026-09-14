@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Ellia Nattel.K</title>
+    <style>
+        html, body { margin: 0; height: 100%; background: #fff; }
+        body {
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'Courier New', Courier, monospace; color: #000;
+        }
+        form { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+        input {
+            width: 7.5ch; font-family: inherit; font-size: 1.35rem; letter-spacing: 0.45em;
+            text-align: center; border: 0; border-bottom: 1px solid #000; border-radius: 0 4px 0 0;
+            padding: 10px 0 8px; background: transparent; outline: none; color: #000;
+        }
+        .err { font-size: 0.72rem; letter-spacing: 1.5px; min-height: 1.2em; opacity: 0; }
+        .err.on { opacity: 1; }
+    </style>
+</head>
+<body>
+    <form id="pin-form" autocomplete="off">
+        <input id="pin-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autofocus aria-label="Code">
+        <p class="err" id="pin-err">Wrong code</p>
+    </form>
+    <script>
+    (function () {
+        var form = document.getElementById('pin-form');
+        var input = document.getElementById('pin-input');
+        var err = document.getElementById('pin-err');
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            err.classList.remove('on');
+            var pin = (input.value || '').trim();
+            if (!pin) { input.focus(); return; }
+            fetch('/api/unlock', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ pin: pin })
+            }).then(function (res) { return res.json().then(function (data) { return { res: res, data: data }; }); })
+            .then(function (out) {
+                if (!out.res.ok || !out.data || !out.data.ok) throw new Error('bad');
+                location.replace('/');
+            }).catch(function () {
+                err.classList.add('on');
+                input.value = '';
+                input.focus();
+            });
+        });
+        input.addEventListener('input', function () {
+            err.classList.remove('on');
+            if ((input.value || '').length >= 4) form.requestSubmit();
+        });
+    })();
+    </script>
+</body>
+</html>

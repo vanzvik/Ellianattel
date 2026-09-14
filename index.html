@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="gated">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -372,6 +372,12 @@
             .dot::after { content: ""; position: absolute; inset: -21px -8px; }
         }
 
+        html.gated { background: #fff; }
+        html.gated body { background: #fff; overflow: hidden; }
+        html.gated .page-paper,
+        html.gated .chrome-root,
+        html.gated .camera-root { visibility: hidden !important; pointer-events: none !important; }
+
         @media (prefers-reduced-motion: reduce) {
             * { animation-duration: 0.01ms !important; animation-delay: 0ms !important; transition-duration: 0.15s !important; }
             .gallery-item, .app-header,
@@ -381,6 +387,17 @@
             .camera-root { transform: none !important; }
         }
     </style>
+    <script>
+    (function () {
+        fetch('/api/session', { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (d && d.ok) document.documentElement.classList.remove('gated');
+                else location.replace('/pin.html');
+            })
+            .catch(function () { location.replace('/pin.html'); });
+    })();
+    </script>
 </head>
 <body>
 
