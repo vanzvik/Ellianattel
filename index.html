@@ -1,0 +1,1383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ellia Nattel.K — Camera Motion</title>
+    <style>
+        /* ========================================
+           BASE RESET & SHARED STYLES  (faithful to original)
+        ======================================== */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html { background-color: #f2f2f0; overflow-anchor: none; overscroll-behavior-y: none; }
+        body {
+            min-height: 100vh;
+            background-color: #f2f2f0;
+            color: #000000;
+            font-family: 'Courier New', Courier, monospace;
+            position: relative;
+            overflow-anchor: none;
+            overflow-x: hidden;
+            overscroll-behavior-y: none;
+        }
+        html.ease-scroll,
+        html.ease-scroll body {
+            overflow: hidden !important;
+            overscroll-behavior-y: none;
+        }
+
+        /* cinematic easings — flowing, light, no bounce */
+        :root{
+            --dive: cubic-bezier(0.7, 0, 0.84, 0);   /* accelerate INTO the sheet */
+            --land: cubic-bezier(0.16, 1, 0.3, 1);   /* settle, no overshoot      */
+            --glide: cubic-bezier(0.65, 0, 0.35, 1); /* smooth two-way camera     */
+            --mm-opacity: 0.2;                         /* grid only: 0 = hidden, 1 = full */
+        }
+
+        .camera-root {
+            position: relative;
+            width: 100%;
+            min-height: 100vh;
+            overflow: hidden;
+            transform: translateZ(0);
+            transform-origin: 50% 50%;
+            will-change: transform;
+        }
+        /* one sheet behind header + gallery so chrome is not a blank white band */
+        .page-paper {
+            position: fixed; inset: 0; z-index: 0; pointer-events: none;
+            background-color: #f2f2f0;
+            transform-origin: 50% 50%;
+            will-change: transform;
+        }
+        .page-paper::before {
+            content: "";
+            position: absolute; inset: 0;
+            opacity: var(--mm-opacity);
+            background-image:
+                linear-gradient(to right,  #b0b0ae 2px, transparent 2px),
+                linear-gradient(to bottom, #b0b0ae 2px, transparent 2px),
+                linear-gradient(to right,  #c0c0be 1px, transparent 1px),
+                linear-gradient(to bottom, #c0c0be 1px, transparent 1px),
+                linear-gradient(to right,  #d8d8d6 1px, transparent 1px),
+                linear-gradient(to bottom, #d8d8d6 1px, transparent 1px);
+            background-size:
+                80px 80px,
+                80px 80px,
+                40px 40px,
+                40px 40px,
+                8px 8px,
+                8px 8px;
+        }
+        .blueprint-canvas {
+            position: absolute; inset: 0;
+            background: transparent;
+            z-index: 1; pointer-events: none;
+        }
+
+        /* ========================================
+           CAMERA STAGE
+        ======================================== */
+        .camera-stage { position: relative; z-index: 3; will-change: transform, opacity; }
+
+        /* ========================================
+           STATIC ARCHITECTURE  (original geometry)
+        ======================================== */
+        .primary-architecture-wrapper {
+            position: relative; z-index: 3; max-width: 1600px; margin: 0 auto;
+            display: grid; grid-template-columns: 1.3fr 2.2fr 2fr;
+            padding: 80px 60px; gap: 0px;
+        }
+        .chrome-root {
+            position: relative;
+            z-index: 20;
+            background: transparent;
+        }
+        .chrome-root .primary-architecture-wrapper { padding-bottom: 0; }
+        .camera-stage .primary-architecture-wrapper { padding-top: 0; padding-bottom: 40px; }
+        .app-header {
+            grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: flex-start;
+            padding-bottom: 80px; opacity: 0;
+            animation: tileRise 0.9s var(--land) 0.2s both;
+        }
+        .brand-logo-container { max-width: 340px; height: auto; }
+        .brand-logo-img { width: 100%; height: auto; display: block; }
+        .app-navigation { display: flex; gap: 0px; align-items: center; padding-top: 10px; padding-right: 15%; }
+        .app-navigation-link { font-size: 0.75rem; font-weight: 600; text-decoration: none; color: #000000; letter-spacing: 1.5px; padding: 0 15px; }
+        .nav-divider { width: 1px; height: 14px; background-color: #000000; opacity: 0.4; }
+
+        /* ========================================
+           STRUCTURAL LINES  (original images + positions)
+           animation swapped to a soft camera-reveal draw
+        ======================================== */
+        .structural-line-h1 {
+            position: absolute; top: 52px; left: 0; width: 514px; height: 14px; z-index: 2;
+            transform-origin: left center; clip-path: inset(0 100% 0 0);
+            animation: drawRight 1.4s var(--glide) both; animation-delay: 0.2s;
+            will-change: clip-path, transform;
+        }
+        .structural-line-v1 {
+            position: absolute; left: 80px; bottom: 0; width: 14px; height: 80%; z-index: 2;
+            clip-path: inset(100% 0 0 0);
+        }
+        .structural-line-h2 {
+            position: absolute; bottom: 12%; right: 0; width: 72%; height: 14px; z-index: 2;
+            clip-path: inset(0 0 0 100%);
+        }
+        .structural-line-v2 {
+            position: absolute; right: 80px; top: 0; width: 14px; height: 100vh;
+            clip-path: inset(0 0 100% 0);
+        }
+        /* product lines draw in as the camera lands */
+        .product-line.show.structural-line-v1 { animation: drawUp   1.5s var(--glide) 0.15s both; }
+        .product-line.show.structural-line-h2 { animation: drawLeft 1.6s var(--glide) 0.30s both; }
+        .product-line.show.structural-line-v2 { animation: drawDown 1.7s var(--glide) 0.45s both; }
+
+        @keyframes drawRight { from { clip-path: inset(0 100% 0 0); opacity: 0; } 8% { opacity: 1; } to { clip-path: inset(0 0 0 0); opacity: 1; } }
+        @keyframes drawLeft  { from { clip-path: inset(0 0 0 100%); opacity: 0; } 8% { opacity: 1; } to { clip-path: inset(0 0 0 0); opacity: 1; } }
+        @keyframes drawUp    { from { clip-path: inset(100% 0 0 0); opacity: 0; } 8% { opacity: 1; } to { clip-path: inset(0 0 0 0); opacity: 1; } }
+        @keyframes drawDown  { from { clip-path: inset(0 0 100% 0); opacity: 0; } 8% { opacity: 1; } to { clip-path: inset(0 0 0 0); opacity: 1; } }
+
+        /* ========================================
+           GALLERY  (original masonry)
+        ======================================== */
+        #gallery-wrapper { grid-column: 1 / -1; }
+        .masonry-gallery {
+            column-count: 4; column-gap: 100px;
+            padding: 0 80px; margin-top: 20px;
+        }
+        .gallery-item {
+            margin-bottom: 50px; break-inside: avoid; opacity: 0;
+            transform: translateY(22px);
+            animation: tileRise 0.9s var(--land) both;
+        }
+        @keyframes tileRise { to { opacity: 1; transform: none; } }
+        body.gallery-seen .gallery-item,
+        body.gallery-seen .app-header {
+            animation: none;
+            opacity: 1;
+            transform: none;
+        }
+        body.gallery-seen .structural-line-h1 {
+            animation: none;
+            clip-path: inset(0 0 0 0);
+            opacity: 1;
+        }
+        .gallery-item.is-return-target img { visibility: hidden; }
+        .gallery-item img { width: 100%; display: block; transition: transform 0.6s var(--land); }
+        .gallery-item a { display:block; overflow:hidden; }
+        .gallery-item img:hover { transform: scale(1.03); cursor: pointer; }
+
+        img.carry-image {
+            position: fixed;
+            z-index: 40;
+            pointer-events: none;
+            object-fit: contain;
+            margin: 0;
+            padding: 0;
+            max-width: none;
+            max-height: none;
+            transform-origin: center center;
+            will-change: left, top, width, height, transform;
+        }
+        .slider-slide img.carry-target { visibility: hidden; }
+
+        /* ========================================
+           PRODUCT VIEW  (original layout)
+        ======================================== */
+        .product-hero-facade {
+            grid-column: 1; position: relative; display: flex; align-items: center;
+            padding-left: 50px; padding-right: 20px; height: 480px;
+        }
+        .glitch-title { font-size: 3.2rem; font-weight: normal; line-height: 1.15; font-family: Garamond, serif; min-height: 2.3em; }
+        .is-typing::after {
+            content: "";
+            display: inline-block;
+            width: 0.07em;
+            height: 0.85em;
+            margin-left: 0.12em;
+            background: currentColor;
+            vertical-align: -0.05em;
+            animation: caretBlink 0.7s steps(1) infinite;
+        }
+        @keyframes caretBlink { 50% { opacity: 0; } }
+
+        .product-central-gallery {
+            grid-column: 2; position: relative; display: flex; justify-content: center; align-items: center;
+            height: 480px;
+        }
+        .slider-frame { position: relative; width: 100%; height: 100%; overflow: hidden; touch-action: pan-y; }
+        .slider-track { display: flex; height: 100%; will-change: transform; }
+        .slider-slide { flex: 0 0 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+        .slider-slide img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+        .slider-pagination { position: absolute; left: 50%; transform: translateX(-50%); bottom: -30px; display: flex; gap: 10px; }
+        .dot { position: relative; width: 30px; height: 2px; background: #ccc; transition: background 0.3s, transform 0.4s var(--land); cursor: pointer; }
+        .dot.active { background: #000; transform: scaleX(1.1); }
+
+        .product-manifesto-container {
+            grid-column: 3; position: relative; display: flex; flex-direction: column; justify-content: center;
+            padding-left: 60px; padding-right: 40px; min-height: 480px; height: auto;
+        }
+        .manifesto-body-text { font-size: 1.25rem; line-height: 1.9; margin-bottom: 45px; color: #1a1a1a; max-width: 380px; }
+        .manifesto-meta-box h4 { font-size: 0.78rem; font-weight: bold; letter-spacing: 2.5px; margin-bottom: 8px; }
+        .manifesto-meta-box p { font-size: 0.90rem; color: #444444; }
+        .related-series { margin-top: 35px; }
+        .related-thumbnails { display: flex; gap: 12px; flex-wrap: wrap; }
+        .related-thumbnails a {
+            display: flex; align-items: center; justify-content: center;
+            width: 72px; height: 72px; border: 1px solid #ddd; overflow: hidden;
+            border-radius: 3px; background: #f7f7f5;
+            transition: transform 0.5s var(--land);
+        }
+        .related-thumbnails a:hover { transform: translateY(-4px); }
+        .related-thumbnails img { width: 100%; height: 100%; object-fit: contain; display: block; }
+
+        .purchase-btn, .waitlist-submit {
+            display: inline-flex; align-items: center; justify-content: center;
+            margin-top: 40px; padding: 14px 32px; align-self: flex-start;
+            background: #000; color: #fff; text-decoration: none;
+            font-size: 0.75rem; font-weight: 600; letter-spacing: 1.5px;
+            border: 0; border-radius: 0 4px 0 0;
+            font-family: inherit; cursor: pointer;
+            transition: background 0.4s var(--land);
+        }
+        .purchase-btn { opacity: 0; }
+        .purchase-btn:hover, .waitlist-submit:hover { background: #222; }
+        .waitlist-submit:disabled { opacity: 0.55; cursor: default; }
+
+        .waitlist {
+            margin-top: 40px; max-width: 380px; align-self: flex-start; width: 100%;
+            opacity: 0;
+        }
+        .waitlist-status {
+            font-size: 0.90rem; font-weight: 600; letter-spacing: 1px;
+            margin-bottom: 14px; line-height: 1.5;
+        }
+        .waitlist-hint { font-size: 0.90rem; color: #444; margin-bottom: 14px; line-height: 1.6; }
+        .waitlist-form { display: flex; flex-direction: column; gap: 10px; }
+        .waitlist-form input[type="email"] {
+            width: 100%; font-family: inherit; font-size: 0.75rem; letter-spacing: 1.5px;
+            padding: 14px 16px; border: 1px solid #000; background: transparent; color: #000;
+            border-radius: 0 4px 0 0; outline: none;
+        }
+        .waitlist-form input[type="email"]:focus { background: #fff; }
+        .waitlist-submit { margin-top: 0; width: 100%; align-self: stretch; }
+        .waitlist-legal {
+            font-size: 0.72rem; line-height: 1.65; color: #444; margin-top: 12px;
+        }
+        .waitlist-error { font-size: 0.72rem; line-height: 1.5; margin-top: 8px; display: none; }
+        .waitlist-error.is-on { display: block; }
+        .waitlist-done { font-size: 0.90rem; line-height: 1.6; display: none; }
+        .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+        .waitlist.is-sent .waitlist-form,
+        .waitlist.is-sent .waitlist-legal,
+        .waitlist.is-sent .waitlist-hint,
+        .waitlist.is-sent .waitlist-error { display: none; }
+        .waitlist.is-sent .waitlist-done { display: block; }
+
+        /* containers visible; copy is revealed in JS top-to-bottom */
+        .product-hero-facade, .product-central-gallery, .product-manifesto-container { opacity: 0; }
+        #product-wrapper.active .product-hero-facade,
+        #product-wrapper.active .product-central-gallery,
+        #product-wrapper.active .product-manifesto-container {
+            opacity: 1;
+            animation: none;
+            transform: none;
+        }
+        .product-central-gallery.is-waiting { opacity: 0 !important; }
+        .manifesto-meta-box, .related-series, .slider-pagination, .purchase-btn, .waitlist { opacity: 0; }
+        .related-thumbnails a { opacity: 0; }
+
+        #product-wrapper { display: none; }
+        #product-wrapper.active { display: contents; }
+
+        /* ========================================
+           RESPONSIVE  (original breakpoint)
+        ======================================== */
+        @media (max-width: 1124px) {
+            .masonry-gallery { column-count: 2; padding: 0 20px; column-gap: 30px; }
+            .primary-architecture-wrapper { padding: 40px 24px; display: block; }
+            .structural-line-h1 { display: none !important; }
+            .app-navigation { padding-right: 0; }
+            .product-hero-facade, .product-central-gallery, .product-manifesto-container { padding: 20px 0; height: auto; }
+            .product-central-gallery { height: auto; max-height: none; }
+            .product-manifesto-container { min-height: 0; }
+            .structural-line-v1, .structural-line-v2, .structural-line-h2 { display: none !important; }
+            #product-wrapper.active { display: block; }
+        }
+
+        /* ========================================
+           PHONE  (single-column, touch-tuned)
+        ======================================== */
+        @media (max-width: 760px) {
+            .primary-architecture-wrapper { padding: 26px 16px 70px; }
+
+            /* header keeps CONTACT | ABOUT but fits a 320px viewport */
+            .app-header { padding-bottom: 40px; align-items: center; }
+            .brand-logo-container { max-width: min(200px, 48vw); }
+            .app-navigation { padding-top: 0; }
+            .app-navigation-link { display: inline-flex; align-items: center; min-height: 44px;
+                font-size: 0.72rem; padding: 0 10px; letter-spacing: 1px; }
+
+            /* gallery: two columns */
+            .masonry-gallery { column-count: 2; column-gap: 16px; padding: 0 4px; margin-top: 8px; }
+            .gallery-item { margin-bottom: 24px; }
+
+            /* product: stacked, comfortable reading sizes */
+            .glitch-title { font-size: 2.1rem; line-height: 1.18; }
+            .product-hero-facade { padding: 4px 4px 0; height: auto; }
+            .product-central-gallery {
+                flex-direction: column;
+                align-items: stretch;
+                height: auto;
+                max-height: none;
+                padding: 4px 0 0;
+            }
+            /* break out of the 16px page gutter; title/copy stay inset */
+            .slider-frame {
+                height: auto;
+                width: calc(100% + 32px);
+                max-width: none;
+                margin-left: -16px;
+                margin-right: -16px;
+            }
+            .slider-track { height: auto; }
+            .slider-slide { height: auto; }
+            .slider-slide img {
+                width: 100%;
+                max-width: 100%;
+                height: auto;
+                max-height: none;
+                object-fit: contain;
+            }
+            .product-manifesto-container { min-height: 0; padding: 8px 4px 0; }
+            .manifesto-body-text { font-size: 1.1rem; line-height: 1.8; margin-bottom: 32px; max-width: none; }
+            .purchase-btn, .waitlist-submit {
+                display: flex; width: 100%; align-self: stretch;
+                margin-top: 32px; min-height: 48px; padding: 16px 20px;
+            }
+            .waitlist { max-width: none; margin-top: 32px; }
+            .waitlist-submit { margin-top: 0; }
+
+            .slider-pagination {
+                position: relative;
+                left: auto;
+                transform: none;
+                bottom: auto;
+                justify-content: center;
+                margin: 10px 0 6px;
+                gap: 14px;
+            }
+            .dot { height: 3px; }
+            .dot::after { content: ""; position: absolute; inset: -21px -8px; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * { animation-duration: 0.01ms !important; animation-delay: 0ms !important; transition-duration: 0.15s !important; }
+            .gallery-item, .app-header,
+            .product-hero-facade, .product-central-gallery, .product-manifesto-container,
+            .manifesto-meta-box, .related-series, .slider-pagination, .related-thumbnails a, .purchase-btn, .waitlist { opacity: 1 !important; transform: none !important; }
+            .is-typing::after { display: none !important; }
+            .camera-root { transform: none !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="page-paper" aria-hidden="true"></div>
+    <div class="chrome-root">
+        <img src="images/line-top-left.png" alt="" class="structural-line-h1" onerror="this.style.display='none'">
+        <div class="primary-architecture-wrapper">
+            <header class="app-header">
+                <div class="brand-logo-container">
+                    <a href="#" id="logo"><img src="images/logo.png" alt="Ellia Nattel.K DESIGNER" class="brand-logo-img" onerror="this.style.display='none'"></a>
+                </div>
+                <nav class="app-navigation">
+                    <a href="#contact" class="app-navigation-link">CONTACT</a>
+                    <div class="nav-divider"></div>
+                    <a href="#about" class="app-navigation-link">ABOUT</a>
+                </nav>
+            </header>
+        </div>
+    </div>
+
+    <div class="camera-root" id="camera">
+    <div class="blueprint-canvas" id="canvas"></div>
+
+    <img src="images/line-bottom-right-h.png" alt="" class="structural-line-h2 product-line" style="display:none" onerror="this.dataset.broken=1">
+    <img src="images/line-bottom-left-v.png" alt="" class="structural-line-v2 product-line" style="display:none" onerror="this.dataset.broken=1">
+    <img src="images/line-bottom-left-v.png" alt="" class="structural-line-v1 product-line" style="display:none" onerror="this.dataset.broken=1">
+
+    <div class="camera-stage" id="stage">
+        <div class="primary-architecture-wrapper">
+
+            <!-- GALLERY -->
+            <div id="gallery-wrapper" style="grid-column: 1 / -1;">
+                <main id="gallery-view" class="masonry-gallery"></main>
+            </div>
+
+            <!-- PRODUCT VIEW -->
+            <div id="product-wrapper" class="product" style="grid-column: 1 / -1;">
+                <section class="product-hero-facade">
+                    <h2 class="glitch-title" id="p-title">Folded Asymmetric Earrings</h2>
+                </section>
+                <section class="product-central-gallery">
+                    <div class="slider-frame" id="frame"><div class="slider-track" id="track"></div></div>
+                    <div class="slider-pagination" id="pager"></div>
+                </section>
+                <section class="product-manifesto-container">
+                    <p class="manifesto-body-text" id="p-body"></p>
+                    <div class="manifesto-meta-box">
+                        <h4>MATERIALS :</h4>
+                        <p id="p-materials"></p>
+                    </div>
+                    <div class="related-series" id="same-series" style="display:none;">
+                        <h4 style="font-size:0.78rem; font-weight:bold; letter-spacing:2.5px; margin-bottom:12px;">SAME SERIES</h4>
+                        <div class="related-thumbnails" id="thumbs"></div>
+                    </div>
+                    <a class="purchase-btn" id="purchase" href="#contact">PURCHASE</a>
+                    <div class="waitlist" id="waitlist" hidden>
+                        <p class="waitlist-status">This piece is not available.</p>
+                        <p class="waitlist-hint">Leave your email to be notified when it is available again.</p>
+                        <form class="waitlist-form" id="waitlist-form" novalidate>
+                            <label for="waitlist-email" class="sr-only">Email</label>
+                            <input type="email" id="waitlist-email" name="email" autocomplete="email" inputmode="email" placeholder="EMAIL" required>
+                            <button type="submit" class="waitlist-submit">NOTIFY ME</button>
+                        </form>
+                        <p class="waitlist-error" id="waitlist-error"></p>
+                        <p class="waitlist-legal">This email address will be used solely to notify you when this piece becomes available. It will not be used for any other purpose.</p>
+                        <p class="waitlist-done" id="waitlist-done">We will email you when this piece is available again.</p>
+                    </div>
+                </section>
+            </div>
+
+        </div>
+    </div>
+    </div>
+
+    <script>
+    /* ================= DATA (unchanged from original) ================= */
+    const products = [
+        { id: 1, title: "Interwoven Link Necklace", description: "Intricately interwoven rectangular links form a sculptural geometric statement necklace with rich depth and natural movement.", materials: "Brass", images: ["1.png", "1-1.png", "1-2.png"], related: ["1-a", "1-b"] },
+        { id: 2, title: "Folded Asymmetric Earrings", description: "Hand-sculpted folded earrings. Each earring consists of two interlocking parts — front and back — creating a complex three dimensional form.", materials: "925 Sterling silver", images: ["2.png", "2-1.png"], related: ["2-a", "2-b"] },
+        { id: 3, title: "Branch Drop Earrings", description: "An abstract interpretation of a branch with leaves — these long silver drop earrings feature a delicate linear structure with refined sculptural detail.", materials: "925 Sterling silver, oxidized", images: ["3.png", "3-1.png"] },
+        { id: 4, title: "Interwoven Link Necklace", description: "Intricately interwoven rectangular links form a sculptural geometric statement necklace with rich depth and natural movement.", materials: "Brass", images: ["4.png", "4-1.png"] },
+        { id: 5, title: "Folded Contour Earrings", description: "Hand folded rectangular contours create an interesting three-dimensional geometric form with a modern silhouette.", materials: "Brass/925 Sterling silver, oxidized", images: ["5.png", "5-1.png"] },
+        { id: 7, title: "Tangled Ring", description: "Handcrafted ring with an organic, interwoven structure.", materials: "blackened brass", images: ["7.png", "7-1.png", "7-2.png"] },
+        { id: 8, title: "Sculpted contours", description: "Hand sculpted, free form contours earrings. Model No. 5 (small)", materials: "925 Sterling silver", images: ["8.png", "8-1.png"] },
+        { id: 9, title: "Sculpted contours", description: "Hand sculpted, free form contours earrings. Model No. 5 (small)", materials: "925 Sterling silver", images: ["9.png", "9-1.png"] },
+        { id: 10, title: "Wild Stone Ring", description: "Handcrafted ring set with a natural black stone found in the wild, featuring a white vein across it. The surface was gently polished to highlight its natural pattern.", materials: "925 Sterling silver, Natural stone", images: ["10.png", "10-1.png"] },
+        { id: 11, title: "Acer Seed Earrings", description: "Inspired by Acer (maple) seeds, these handcrafted earrings present a structured geometric interpretation of the natural form. Asymmetric pair.", materials: "Brass", images: ["11.png", "11-1.png"] },
+        { id: 12, title: "Wire Sketch Earrings", description: "Handcrafted geometric frames made from flattened metal wire. These earrings create a large-volume, three-dimensional sketch-like appearance while remaining surprisingly lightweight.", materials: "925 Sterling silver, oxidized", images: ["12.png", "12-1.png"] },
+        { id: 13, title: "Folded Heart Ring", description: "Handcrafted brass ring featuring a geometric folded heart. The sculptural form creates a bold yet minimal statement with a modern edge.", materials: "Brass", images: ["13.png", "13-1.png", "13-2.png"] },
+        { id: 14, title: "Geometric Link Necklace", description: "Bold architectural rectangular links with unique pivoting connections create a sculptural yet fluid silhouette. This modern piece blends minimalist elegance with strong geometric presence.", materials: "Oxidized Brass", images: ["14.png", "14-1.png"] },
+        { id: 15, title: "Geometric Link Necklace", description: "Bold architectural rectangular links with unique pivoting connections create a sculptural yet fluid silhouette. This modern piece blends minimalist elegance with strong geometric presence.", materials: "Oxidized Brass", images: ["15.png", "15-1.png"] },
+        { id: 16, title: "Layered Rectangle Earrings", description: "Handcrafted brass earrings with layered rectangular forms. Elongated geometric structure with clean modern lines.", materials: "Brass", images: ["16.png", "16-1.png"] },
+        { id: 17, title: "Sculpted contours", description: "Hand sculpted, free form contours earrings. Model No. 6 (small)", materials: "blackened brass", images: ["17.png", "17-1.png", "17-2.png"] },
+        { id: "1-a", title: "Sculpted contours", description: "Hand sculpted, free form contours ring Model No. 2 (medium)", materials: "925 Sterling silver", images: ["1-a.png", "1-a-1.png", "1-a-2.png"], related: [1] },
+        { id: "1-b", title: "Sculpted contours", description: "Hand sculpted, free form contours ring Model No. 4 (small)", materials: "925 Sterling silver", images: ["1-b.png", "1-b-1.png", "1-b-2.png"], related: [1] },
+        { id: "2-a", title: "Folded Asymmetric Earrings", description: "Hand-sculpted folded earrings. Each earring consists of two interlocking parts — front and back — creating a complex three dimensional form.", materials: "brass", images: ["2-a.png"], related: [2] },
+        { id: "2-b", title: "Folded Asymmetric Earrings", description: "Hand-sculpted folded earrings. Each earring consists of two interlocking parts — front and back — creating a complex three dimensional form.", materials: "brass", images: ["2-b.png"], related: [2] }
+    ];
+
+    const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const MOBILE_MQ = window.matchMedia('(max-width: 1124px), (hover: none)');
+    const isMobile = () => MOBILE_MQ.matches;
+
+    const galleryWrap = document.getElementById('gallery-wrapper');
+    const productWrap  = document.getElementById('product-wrapper');
+    const camera       = document.getElementById('camera');
+    const canvas       = document.getElementById('canvas');
+    const paper        = document.querySelector('.page-paper');
+    let view = 'gallery';
+    let heldSourceEl = null; /* gallery tile we entered from */
+    let heldScrollY = 0;
+    let camGen = 0;
+    let easeCtl = null;
+    const DIVE_TILT = -3; /* degrees left on gallery → product */
+    const INTRO_KEY = 'elliaGalleryIntro';
+    const killAnims = el => { try { el.getAnimations().forEach(a => a.cancel()); } catch(e){} };
+    function hasSeenGalleryIntro(){
+        try { return sessionStorage.getItem(INTRO_KEY) === '1'; } catch (e) { return false; }
+    }
+    function markGalleryIntroSeen(){
+        try { sessionStorage.setItem(INTRO_KEY, '1'); } catch (e) {}
+        document.body.classList.add('gallery-seen');
+    }
+    function clearProductChromeStyles(){
+        productWrap.querySelectorAll('.product-hero-facade, .product-manifesto-container, .slider-pagination, .product-central-gallery, .manifesto-meta-box, .related-series, .related-thumbnails a, .purchase-btn, .waitlist').forEach(el => {
+            killAnims(el);
+            el.style.animation = '';
+            el.style.opacity = '';
+            el.style.transition = '';
+            el.style.transform = '';
+        });
+        const gal = document.querySelector('.product-central-gallery');
+        if (gal) gal.classList.remove('is-waiting');
+    }
+    function targetImageRect(img){
+        const r = img.getBoundingClientRect();
+        if (r.width >= 2 && r.height >= 2) return r;
+        const fr = frame.getBoundingClientRect();
+        const nw = img.naturalWidth || 1, nh = img.naturalHeight || 1;
+        const s = Math.min(fr.width / nw, fr.height / nh);
+        const w = nw * s, h = nh * s;
+        return { left: fr.left + (fr.width - w) / 2, top: fr.top + (fr.height - h) / 2, width: w, height: h };
+    }
+    const landEase = () =>
+        getComputedStyle(document.documentElement).getPropertyValue('--land').trim() || 'cubic-bezier(0.16,1,0.3,1)';
+
+    function rectCenter(r){
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    }
+    function resetCamera(){
+        killAnims(camera);
+        if (paper) killAnims(paper);
+        camera.style.transform = 'translateZ(0)';
+        camera.style.transformOrigin = '50% 50%';
+        if (paper) {
+            paper.style.transform = '';
+            paper.style.transformOrigin = '50% 50%';
+        }
+    }
+    function setCameraOrigin(r){
+        const c = rectCenter(r);
+        const cr = camera.getBoundingClientRect();
+        camera.style.transformOrigin = `${c.x - cr.left}px ${c.y - cr.top}px`;
+        if (paper) paper.style.transformOrigin = `${c.x}px ${c.y}px`;
+    }
+    function setSceneTransform(css){
+        camera.style.transform = css;
+        if (paper) paper.style.transform = css;
+    }
+    /* Transform that makes `to` appear where `from` is — paper + content share it. */
+    function flipMap(from, to){
+        const s = (from.width / Math.max(to.width, 1) + from.height / Math.max(to.height, 1)) / 2;
+        const f = rectCenter(from), t = rectCenter(to);
+        return { s, tx: f.x - t.x, ty: f.y - t.y };
+    }
+    function camCss(m, rot = 0){
+        return `translate(${m.tx}px, ${m.ty}px) scale(${m.s}) rotate(${rot}deg)`;
+    }
+    function getScrollY(){
+        return window.pageYOffset
+            || document.documentElement.scrollTop
+            || document.body.scrollTop
+            || 0;
+    }
+    function setScrollRaw(y){
+        y = Math.max(0, y);
+        const html = document.documentElement;
+        const body = document.body;
+        const prevH = html.style.scrollBehavior;
+        const prevB = body.style.scrollBehavior;
+        html.style.scrollBehavior = 'auto';
+        body.style.scrollBehavior = 'auto';
+        html.scrollTop = y;
+        body.scrollTop = y;
+        window.scrollTo(0, y);
+        html.style.scrollBehavior = prevH;
+        body.style.scrollBehavior = prevB;
+    }
+    function snapScroll(y){
+        y = Math.max(0, Math.round(y));
+        setScrollRaw(y);
+        if (easeCtl) easeCtl.sync(y);
+    }
+    function stopTouchMomentum(){
+        document.documentElement.style.overflow = 'hidden';
+        document.body.style.overflow = 'hidden';
+    }
+    function startTouchMomentum(){
+        if (easeCtl && easeCtl.isOn()){
+            document.documentElement.style.overflow = 'hidden';
+            document.body.style.overflow = 'hidden';
+            return;
+        }
+        document.documentElement.style.overflow = '';
+        document.body.style.overflow = '';
+    }
+
+    /* Mobile: finger sets a target, the page eases toward it (same family as desktop edge-scroll). */
+    easeCtl = (() => {
+        const LERP = 0.2;
+        const FRICTION = 0.93;
+        const STOP = 0.16;
+        const RESIST = 0.35;
+        const AXIS = 8;
+        let on = false;
+        let current = 0;
+        let target = 0;
+        let vel = 0;
+        let touching = false;
+        let axis = null;
+        let lastY = 0;
+        let lastT = 0;
+        let looping = false;
+        let dragged = false;
+        let startX = 0;
+        let startY = 0;
+
+        function maxY(){
+            return Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+        }
+        function loop(){
+            looping = true;
+            if (!on || view === 'animating'){
+                looping = false;
+                return;
+            }
+            const max = maxY();
+            if (!touching){
+                target += vel;
+                vel *= FRICTION;
+                if (target < 0){ target = 0; vel = 0; }
+                else if (target > max){ target = max; vel = 0; }
+                if (Math.abs(vel) < STOP) vel = 0;
+            }
+            current += (target - current) * LERP;
+            if (!touching && !vel && Math.abs(target - current) < 0.4){
+                current = target;
+                setScrollRaw(current);
+                looping = false;
+                return;
+            }
+            setScrollRaw(current);
+            requestAnimationFrame(loop);
+        }
+        function kick(){
+            if (!looping) requestAnimationFrame(loop);
+        }
+        function onStart(e){
+            if (!on || view === 'animating' || e.touches.length !== 1) return;
+            touching = true;
+            axis = null;
+            dragged = false;
+            vel = 0;
+            startX = e.touches[0].clientX;
+            startY = lastY = e.touches[0].clientY;
+            lastT = performance.now();
+            current = getScrollY();
+            target = current;
+        }
+        function onMove(e){
+            if (!on || !touching || view === 'animating' || e.touches.length !== 1) return;
+            const x = e.touches[0].clientX;
+            const y = e.touches[0].clientY;
+            const dx = x - startX;
+            const dy = y - startY;
+            if (!axis){
+                if (Math.abs(dx) < AXIS && Math.abs(dy) < AXIS) return;
+                axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+            }
+            if (axis !== 'y') return;
+            e.preventDefault();
+            dragged = true;
+            const now = performance.now();
+            const move = lastY - y;
+            const max = maxY();
+            let next = target + move;
+            if (next < 0 || next > max) next = target + move * RESIST;
+            target = next;
+            const dt = now - lastT;
+            if (dt > 0 && dt < 80) vel = move / dt * 16.67;
+            lastY = y;
+            lastT = now;
+            kick();
+        }
+        function onEnd(){
+            if (!touching) return;
+            touching = false;
+            const max = maxY();
+            if (target < 0) target = 0;
+            if (target > max) target = max;
+            kick();
+        }
+        function onClick(e){
+            if (!dragged) return;
+            e.preventDefault();
+            e.stopPropagation();
+            dragged = false;
+        }
+        function onWheel(e){
+            if (!on || view === 'animating') return;
+            e.preventDefault();
+            target += e.deltaY;
+            const max = maxY();
+            if (target < 0) target = 0;
+            if (target > max) target = max;
+            kick();
+        }
+        function setActive(next){
+            if (next === on) return;
+            on = next;
+            document.documentElement.classList.toggle('ease-scroll', on);
+            vel = 0;
+            touching = false;
+            if (on){
+                current = target = getScrollY();
+                document.documentElement.style.overflow = 'hidden';
+                document.body.style.overflow = 'hidden';
+            } else {
+                document.documentElement.style.overflow = '';
+                document.body.style.overflow = '';
+            }
+        }
+        function refresh(){
+            setActive(!REDUCED && isMobile());
+        }
+        window.addEventListener('touchstart', onStart, { passive: true });
+        window.addEventListener('touchmove', onMove, { passive: false });
+        window.addEventListener('touchend', onEnd, { passive: true });
+        window.addEventListener('touchcancel', onEnd, { passive: true });
+        window.addEventListener('click', onClick, true);
+        window.addEventListener('wheel', onWheel, { passive: false });
+        if (MOBILE_MQ.addEventListener) MOBILE_MQ.addEventListener('change', refresh);
+        else MOBILE_MQ.addListener(refresh);
+        refresh();
+        return {
+            sync(y){
+                current = target = Math.max(0, y);
+                vel = 0;
+            },
+            refresh,
+            isOn: () => on
+        };
+    })();
+
+    function restoreGalleryPlace(){
+        snapScroll(heldScrollY);
+        const el = heldSourceEl && (heldSourceEl.closest('.gallery-item') || heldSourceEl);
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        const visible = r.bottom > 80 && r.top < window.innerHeight - 40;
+        if (visible) return;
+        try {
+            el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+        } catch (err) {
+            el.scrollIntoView(true);
+        }
+        if (easeCtl) easeCtl.sync(getScrollY());
+    }
+    function hideCamera(){
+        camera.style.opacity = '0';
+        camera.style.pointerEvents = 'none';
+    }
+    function showCamera(){
+        camera.style.opacity = '';
+        camera.style.pointerEvents = '';
+    }
+    function playCamera(start, end, dur, ease){
+        killAnims(camera);
+        if (paper) killAnims(paper);
+        const mid = {
+            s: (start.s + end.s) / 2,
+            tx: (start.tx + end.tx) / 2,
+            ty: (start.ty + end.ty) / 2
+        };
+        const frames = [
+            { transform: camCss(start, 0) },
+            { transform: camCss(mid, DIVE_TILT), offset: 0.45 },
+            { transform: camCss(end, 0) }
+        ];
+        const opts = { duration: dur, easing: ease, fill: 'forwards' };
+        if (paper) paper.animate(frames, opts);
+        return camera.animate(frames, opts);
+    }
+
+    /* ================= GALLERY ================= */
+    function initGallery(){
+        const gallery = document.getElementById('gallery-view');
+        gallery.innerHTML = '';
+        const seen = hasSeenGalleryIntro() || REDUCED;
+        if (seen) markGalleryIntroSeen();
+        let n = 0;
+        products.forEach(p => {
+            if (typeof p.id !== 'number') return;
+            const div = document.createElement('div');
+            div.className = 'gallery-item';
+            div.dataset.id = p.id;
+            if (!seen) div.style.animationDelay = (0.2 + (++n) * 0.07).toFixed(2) + 's';
+            else ++n;
+            const a = document.createElement('a'); a.href = '#';
+            const img = document.createElement('img');
+            img.src = `images/${p.id}.png`; img.alt = p.title; img.loading = 'lazy';
+            img.onerror = () => { img.onerror = null; a.style.minHeight = '160px';
+                a.style.background = 'repeating-linear-gradient(45deg,#fafafa,#fafafa 8px,#f1f1f1 8px,#f1f1f1 16px)'; img.remove(); };
+            a.appendChild(img); div.appendChild(a); gallery.appendChild(div);
+            a.addEventListener('click', e => { e.preventDefault(); cameraToProduct(p.id, a); });
+        });
+        if (!seen) {
+            const introMs = (0.2 + n * 0.07 + 0.9) * 1000 + 80;
+            setTimeout(markGalleryIntroSeen, introMs);
+        }
+    }
+
+    /* ================= CAMERA: GALLERY → PRODUCT =================
+       One transform on #camera: paper, photo, and page zoom in together.
+       Starts mapped onto the gallery tile so the first image never flickers. */
+    function cameraToProduct(id, sourceEl){
+        const product = products.find(p => p.id === id);
+        if (!product || view !== 'gallery') return;
+        view = 'animating';
+
+        heldSourceEl = sourceEl;
+        heldScrollY = getScrollY();
+
+        if (REDUCED){
+            openProductSimple(product);
+            return;
+        }
+        const token = ++camGen;
+        markGalleryIntroSeen();
+        resetCamera();
+        clearProductChromeStyles();
+
+        const sourceImg = (sourceEl && sourceEl.querySelector) ? (sourceEl.querySelector('img') || sourceEl) : sourceEl;
+        let from = sourceImg && sourceImg.getBoundingClientRect ? sourceImg.getBoundingClientRect() : null;
+        if (!from || (from.width === 0 && from.height === 0)) {
+            from = { left: window.innerWidth/2 - 80, top: window.innerHeight/2 - 80, width: 160, height: 160 };
+        }
+
+        stopTouchMomentum();
+        hideCamera();
+        swapContent(product);
+        galleryWrap.style.display = 'none';
+        productWrap.classList.add('active', 'from-gallery');
+        showLines(true);
+        snapScroll(0);
+
+        const targetImg = track.querySelector('.slider-slide img');
+        const ease = landEase();
+        const dur = 860;
+        const rest = { s: 1, tx: 0, ty: 0 };
+
+        const landProduct = () => {
+            if (token !== camGen) return;
+            resetCamera();
+            startTouchMomentum();
+            view = 'product';
+        };
+
+        const startZoom = () => {
+            if (token !== camGen) return;
+            void frame.offsetWidth;
+            const to = targetImg ? targetImageRect(targetImg) : from;
+            setCameraOrigin(to);
+            const start = flipMap(from, to);
+            setSceneTransform(camCss(start));
+            showCamera();
+            playCamera(start, rest, dur, ease)
+                .finished.then(landProduct)
+                .catch(landProduct);
+            productWrap.classList.remove('land'); void productWrap.offsetWidth; productWrap.classList.add('land');
+            revealProductCopy(product, true);
+        };
+
+        const kick = () => requestAnimationFrame(() => requestAnimationFrame(startZoom));
+        if (targetImg && !targetImg.complete) {
+            targetImg.addEventListener('load', kick, { once: true });
+        } else {
+            kick();
+        }
+    }
+
+    function swapToProduct(product){
+        openProductSimple(product);
+    }
+    function openProductSimple(product){
+        camGen++;
+        markGalleryIntroSeen();
+        resetCamera();
+        showCamera();
+        clearProductChromeStyles();
+        stopTouchMomentum();
+        swapContent(product);
+        galleryWrap.style.display = 'none';
+        productWrap.classList.add('active', 'from-gallery', 'land');
+        showLines(true);
+        snapScroll(0);
+        requestAnimationFrame(() => {
+            snapScroll(0);
+            startTouchMomentum();
+            snapScroll(0);
+            view = 'product';
+            revealProductCopy(product, false);
+        });
+    }
+
+    function isWaitlistPiece(id){
+        const n = typeof id === 'number' ? id : parseInt(String(id), 10);
+        return n % 2 === 0;
+    }
+    function waitlistKey(id){ return 'elliaWaitlist:' + String(id); }
+    function waitlistAlreadySent(id){
+        try { return sessionStorage.getItem(waitlistKey(id)) === '1'; } catch (e) { return false; }
+    }
+    function markWaitlistSent(id){
+        try { sessionStorage.setItem(waitlistKey(id), '1'); } catch (e) {}
+    }
+    function syncCta(product){
+        const buy = document.getElementById('purchase');
+        const wait = document.getElementById('waitlist');
+        const waitlist = isWaitlistPiece(product.id);
+        if (buy) {
+            buy.style.display = waitlist ? 'none' : '';
+            buy.style.opacity = '0';
+        }
+        if (wait) {
+            wait.hidden = !waitlist;
+            wait.style.display = waitlist ? '' : 'none';
+            wait.style.opacity = '0';
+            wait.dataset.productId = String(product.id);
+            wait.dataset.title = product.title || '';
+            wait.classList.toggle('is-sent', waitlist && waitlistAlreadySent(product.id));
+            const form = document.getElementById('waitlist-form');
+            const err = document.getElementById('waitlist-error');
+            if (form && !(waitlist && waitlistAlreadySent(product.id))) form.reset();
+            if (err) { err.textContent = ''; err.classList.remove('is-on'); }
+        }
+    }
+
+    /* fill slider + series; copy is typed in revealProductCopy */
+    function swapContent(product){
+        cancelType();
+        const title = document.getElementById('p-title');
+        const body = document.getElementById('p-body');
+        const mats = document.getElementById('p-materials');
+        if (title) { title.textContent = ''; title.classList.remove('is-typing'); }
+        if (body) { body.textContent = ''; body.classList.remove('is-typing'); }
+        if (mats) { mats.textContent = ''; mats.classList.remove('is-typing'); }
+        buildSlider(product);
+        buildSameSeries(product);
+        syncCta(product);
+        const meta = document.querySelector('.manifesto-meta-box');
+        const series = document.getElementById('same-series');
+        const pager = document.getElementById('pager');
+        const buy = document.getElementById('purchase');
+        const wait = document.getElementById('waitlist');
+        [meta, series, pager, buy, wait].forEach(el => { if (el) el.style.opacity = '0'; });
+        document.querySelectorAll('.related-thumbnails a').forEach(a => { a.style.opacity = '0'; });
+    }
+
+    let typeTimers = [];
+    let revealGen = 0;
+    function cancelType(){
+        typeTimers.forEach(clearTimeout);
+        typeTimers = [];
+        revealGen++;
+        document.querySelectorAll('.is-typing').forEach(el => el.classList.remove('is-typing'));
+    }
+    function waitMs(ms){
+        return new Promise(resolve => { typeTimers.push(setTimeout(resolve, ms)); });
+    }
+    function typeInto(el, text, msPerChar){
+        return new Promise(resolve => {
+            if (!el) { resolve(); return; }
+            el.setAttribute('aria-label', text);
+            if (REDUCED) {
+                el.textContent = text;
+                el.classList.remove('is-typing');
+                resolve();
+                return;
+            }
+            el.textContent = '';
+            el.classList.add('is-typing');
+            el.style.opacity = '1';
+            let i = 0;
+            const step = () => {
+                i += 1;
+                el.textContent = text.slice(0, i);
+                if (i < text.length) typeTimers.push(setTimeout(step, msPerChar));
+                else { el.classList.remove('is-typing'); resolve(); }
+            };
+            typeTimers.push(setTimeout(step, 30));
+        });
+    }
+    async function revealProductCopy(product, imageFirst){
+        const token = ++revealGen;
+        const still = () => token === revealGen;
+        const title = document.getElementById('p-title');
+        const body = document.getElementById('p-body');
+        const mats = document.getElementById('p-materials');
+        const meta = document.querySelector('.manifesto-meta-box');
+        const series = document.getElementById('same-series');
+        const gal = document.querySelector('.product-central-gallery');
+        const pager = document.getElementById('pager');
+        const buy = document.getElementById('purchase');
+        const wait = document.getElementById('waitlist');
+        const fade = (el, ms) => {
+            if (!el) return;
+            el.style.transition = `opacity ${ms}ms cubic-bezier(0.16,1,0.3,1)`;
+            el.style.opacity = '1';
+        };
+
+        if (gal) {
+            if (imageFirst) {
+                gal.classList.remove('is-waiting');
+                gal.style.opacity = '1';
+            } else {
+                gal.classList.add('is-waiting');
+            }
+        }
+        if (pager) pager.style.opacity = '0';
+        if (meta) meta.style.opacity = '0';
+        if (series) series.style.opacity = '0';
+        if (buy) buy.style.opacity = '0';
+        if (wait) wait.style.opacity = '0';
+
+        if (!still()) return;
+        await typeInto(title, product.title || '', 26);
+        if (!still()) return;
+
+        if (gal && !imageFirst) {
+            gal.classList.remove('is-waiting');
+            gal.style.transition = 'opacity 0.45s cubic-bezier(0.16,1,0.3,1)';
+            gal.style.opacity = '1';
+        }
+        fade(pager, 400);
+        await waitMs(imageFirst ? 120 : 280);
+        if (!still()) return;
+
+        await typeInto(body, product.description || '', 6);
+        if (!still()) return;
+
+        fade(meta, 350);
+        await typeInto(mats, product.materials || '', 20);
+        if (!still()) return;
+
+        if (series && series.style.display !== 'none') {
+            fade(series, 400);
+            [...series.querySelectorAll('a')].forEach((a, i) => {
+                typeTimers.push(setTimeout(() => {
+                    a.style.transition = 'opacity 0.4s cubic-bezier(0.16,1,0.3,1)';
+                    a.style.opacity = '1';
+                }, 70 * i));
+            });
+        }
+        if (isWaitlistPiece(product.id)) fade(wait, 400);
+        else fade(buy, 400);
+    }
+
+    /* ================= CAMERA: PRODUCT → GALLERY ================= */
+    function cameraToGallery(){
+        if (view !== 'product' && view !== 'animating') return;
+        view = 'animating';
+        stopAuto();
+        markGalleryIntroSeen();
+
+        const token = ++camGen;
+        const finishGallery = () => {
+            if (token !== camGen) return;
+            showCamera();
+            resetCamera();
+            restoreGalleryPlace();
+            requestAnimationFrame(() => {
+                restoreGalleryPlace();
+                startTouchMomentum();
+                restoreGalleryPlace();
+                view = 'gallery';
+            });
+            setTimeout(restoreGalleryPlace, 50);
+        };
+
+        cancelType();
+        if (REDUCED){
+            closeProductSimple();
+            return;
+        }
+
+        const visibleImg = (slides[index] && slides[index].querySelector('img')) || track.querySelector('.slider-slide img');
+        let from = visibleImg ? targetImageRect(visibleImg) : null;
+        if (!from || from.width < 2) {
+            const fr = frame.getBoundingClientRect();
+            from = { left: fr.left, top: fr.top, width: Math.max(fr.width, 1), height: Math.max(fr.height, 1) };
+        }
+
+        const destImg = heldSourceEl && heldSourceEl.querySelector('img');
+        stopTouchMomentum();
+        hideCamera();
+        productWrap.classList.remove('active', 'land', 'from-gallery');
+        clearProductChromeStyles();
+        galleryWrap.style.display = '';
+        showLines(false);
+        restoreGalleryPlace();
+
+        const ease = landEase();
+        const dur = 860;
+        const rest = { s: 1, tx: 0, ty: 0 };
+
+        const runZoomOut = () => {
+            if (token !== camGen) return;
+            restoreGalleryPlace();
+            void galleryWrap.offsetHeight;
+            const to = destImg ? destImg.getBoundingClientRect() : from;
+            setCameraOrigin(to);
+            const start = flipMap(from, to);
+            setSceneTransform(camCss(start));
+            showCamera();
+            playCamera(start, rest, dur, ease)
+                .finished.then(finishGallery)
+                .catch(finishGallery);
+        };
+
+        const kick = () => requestAnimationFrame(() => requestAnimationFrame(runZoomOut));
+        if (destImg && destImg.decode) destImg.decode().then(kick).catch(kick);
+        else kick();
+    }
+
+    function closeProductSimple(){
+        camGen++;
+        showCamera();
+        resetCamera();
+        stopTouchMomentum();
+        productWrap.classList.remove('active', 'land', 'from-gallery');
+        clearProductChromeStyles();
+        galleryWrap.style.display = '';
+        showLines(false);
+        restoreGalleryPlace();
+        requestAnimationFrame(() => {
+            restoreGalleryPlace();
+            startTouchMomentum();
+            restoreGalleryPlace();
+            view = 'gallery';
+        });
+        setTimeout(restoreGalleryPlace, 120);
+        setTimeout(restoreGalleryPlace, 320);
+    }
+
+    /* ================= STRUCTURAL LINES ================= */
+    function showLines(show){
+        document.querySelectorAll('.product-line').forEach(l => {
+            l.classList.remove('show');
+            l.style.display = show && !l.dataset.broken ? 'block' : 'none';
+            void l.offsetWidth;
+            if (show) l.classList.add('show');
+        });
+    }
+
+    /* ================= SLIDER (drag + momentum + autoplay) ================= */
+    const frame = document.getElementById('frame');
+    const track = document.getElementById('track');
+    const pager = document.getElementById('pager');
+    let slides = [], dots = [], index = 0, auto = null;
+
+    function buildSlider(product){
+        track.innerHTML = ''; pager.innerHTML = ''; index = 0;
+        (product.images || []).forEach((name,i) => {
+            const slide = document.createElement('div'); slide.className = 'slider-slide';
+            const img = document.createElement('img'); img.src = `images/${name}`; img.alt = `${product.title} ${i+1}`;
+            img.onerror = () => { img.onerror = null; img.style.visibility = 'hidden'; };
+            slide.appendChild(img); track.appendChild(slide);
+            const dot = document.createElement('span'); dot.className = 'dot' + (i===0?' active':'');
+            dot.addEventListener('click', () => { stopAuto(); goTo(i,true); startAuto(); });
+            pager.appendChild(dot);
+        });
+        slides = [...track.querySelectorAll('.slider-slide')];
+        dots = [...pager.querySelectorAll('.dot')];
+        pager.style.display = slides.length > 1 ? 'flex' : 'none';
+        setTrack(0,false);
+        startAuto();
+    }
+    function setTrack(px, animate){
+        track.style.transition = animate ? 'transform 0.7s var(--land)' : 'none';
+        track.style.transform = `translate3d(${px}px,0,0)`;
+    }
+    function goTo(i, animate){
+        index = Math.max(0, Math.min(i, slides.length-1));
+        setTrack(-index * frame.clientWidth, animate);
+        dots.forEach((d,di) => d.classList.toggle('active', di===index));
+    }
+    let drag=false, startX=0, basePx=0, lastX=0, lastT=0, vx=0;
+    frame.addEventListener('pointerdown', e => {
+        if (slides.length < 2) return;
+        drag = true; stopAuto();
+        startX = lastX = e.clientX; lastT = performance.now(); vx = 0;
+        basePx = -index * frame.clientWidth;
+        track.style.transition = 'none';
+        frame.setPointerCapture(e.pointerId);
+    });
+    frame.addEventListener('pointermove', e => {
+        if (!drag) return;
+        let pos = basePx + (e.clientX - startX);
+        const max = 0, min = -(slides.length-1) * frame.clientWidth;
+        if (pos > max) pos = max + (pos-max)*0.35;
+        if (pos < min) pos = min + (pos-min)*0.35;
+        setTrack(pos, false);
+        const now = performance.now(), dt = now - lastT;
+        if (dt > 0) vx = (e.clientX - lastX) / dt;   // px/ms of the latest move
+        lastX = e.clientX; lastT = now;
+    });
+    function endDrag(e){
+        if (!drag) return; drag = false;
+        const dx = e.clientX - startX;
+        const v = vx;
+        const w = frame.clientWidth;
+        let target = index;
+        if (dx < -w*0.18 || v < -0.45) target = index + 1;
+        else if (dx > w*0.18 || v > 0.45) target = index - 1;
+        goTo(target, true); startAuto();
+    }
+    frame.addEventListener('pointerup', endDrag);
+    frame.addEventListener('pointercancel', endDrag);
+    window.addEventListener('resize', () => { if (view==='product') setTrack(-index*frame.clientWidth, false); });
+    function startAuto(){ stopAuto(); if (REDUCED || slides.length < 2) return; auto = setInterval(() => goTo((index+1)%slides.length, true), 3000); }
+    function stopAuto(){ if (auto){ clearInterval(auto); auto = null; } }
+
+    /* ================= SAME SERIES ================= */
+    function buildSameSeries(product){
+        const wrap = document.getElementById('same-series');
+        const thumbs = document.getElementById('thumbs');
+        thumbs.innerHTML = '';
+        const rel = (product.related || []).map(id => products.find(p => p.id === id)).filter(Boolean);
+        if (!rel.length){ wrap.style.display = 'none'; return; }
+        rel.forEach(rp => {
+            const a = document.createElement('a'); a.href = '#';
+            const img = document.createElement('img');
+            const file = (rp.images && rp.images[0]) ? rp.images[0] : `${rp.id}.png`;
+            img.src = `images/${file}`;
+            img.alt = rp.title;
+            img.onerror = () => { img.onerror = null; img.src = `images/${rp.id}.png`; };
+            a.appendChild(img);
+            a.addEventListener('click', e => { e.preventDefault(); relatedJump(rp.id); });
+            thumbs.appendChild(a);
+        });
+        wrap.style.display = 'block';
+    }
+    /* product → related product: a quick light glide (not the full dive) */
+    function relatedJump(id){
+        if (view !== 'product') return;
+        const product = products.find(p => p.id === id); if (!product) return;
+        view = 'animating';
+        stopAuto();
+        if (REDUCED){
+            clearProductChromeStyles();
+            swapContent(product); showLines(true);
+            productWrap.classList.remove('land'); void productWrap.offsetWidth; productWrap.classList.add('land');
+            view = 'product';
+            return;
+        }
+        const cols = [...productWrap.querySelectorAll('.product-hero-facade, .product-central-gallery, .product-manifesto-container')];
+        cols.forEach(killAnims);
+        Promise.all(cols.map(el =>
+            el.animate(
+                [{ opacity: 1 }, { opacity: 0 }],
+                { duration: 280, easing: 'cubic-bezier(0.65,0,0.35,1)', fill: 'forwards' }
+            ).finished.catch(() => {})
+        )).then(() => {
+            if (view !== 'animating') return;
+            clearProductChromeStyles();
+            swapContent(product);
+            showLines(true);
+            productWrap.classList.remove('from-gallery');
+            productWrap.classList.remove('land');
+            void productWrap.offsetWidth;
+            productWrap.classList.add('land');
+            view = 'product';
+            revealProductCopy(product, true);
+        });
+    }
+
+    /* ================= LOGO → HOME + scroll parallax ================= */
+    document.getElementById('logo').addEventListener('click', e => {
+        if (view === 'product' || view === 'animating'){ e.preventDefault(); cameraToGallery(); }
+    });
+    if (!REDUCED){
+        let ticking = false;
+        window.addEventListener('scroll', () => {
+            if (ticking) return; ticking = true;
+            requestAnimationFrame(() => {
+                if (view === 'gallery' && !isMobile() && paper) {
+                    paper.style.transform = `translateY(${getScrollY() * 0.05}px)`;
+                }
+                ticking = false;
+            });
+        }, { passive: true });
+    }
+
+    /* Desktop: cursor in the bottom (or top) edge eases the gallery scroll. */
+    const DESKTOP_HOVER = window.matchMedia('(hover: hover) and (pointer: fine) and (min-width: 1125px)');
+    if (!REDUCED){
+        const EDGE = 120;
+        const MAX_PX = 15;
+        let targetVel = 0;
+        let vel = 0;
+        let looping = false;
+        function edgeLoop(){
+            looping = true;
+            if (view !== 'gallery' || !DESKTOP_HOVER.matches){
+                vel = 0; targetVel = 0; looping = false; return;
+            }
+            vel += (targetVel - vel) * 0.14;
+            if (Math.abs(vel) < 0.03) vel = 0;
+            if (vel) snapScroll(getScrollY() + vel);
+            if (vel || targetVel) requestAnimationFrame(edgeLoop);
+            else looping = false;
+        }
+        window.addEventListener('mousemove', e => {
+            if (view !== 'gallery' || !DESKTOP_HOVER.matches){ targetVel = 0; return; }
+            const h = window.innerHeight;
+            const y = e.clientY;
+            if (y > h - EDGE){
+                const t = Math.min(1, (y - (h - EDGE)) / EDGE);
+                targetVel = t * t * MAX_PX;
+            } else if (y < EDGE){
+                const t = Math.min(1, (EDGE - y) / EDGE);
+                targetVel = -(t * t) * MAX_PX;
+            } else {
+                targetVel = 0;
+            }
+            if (!looping && (targetVel || vel)) requestAnimationFrame(edgeLoop);
+        }, { passive: true });
+        document.addEventListener('mouseleave', () => { targetVel = 0; });
+    }
+
+    if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+    function bindWaitlist(){
+        const form = document.getElementById('waitlist-form');
+        if (!form || form.dataset.bound) return;
+        form.dataset.bound = '1';
+        form.addEventListener('submit', async e => {
+            e.preventDefault();
+            const wait = document.getElementById('waitlist');
+            const input = document.getElementById('waitlist-email');
+            const err = document.getElementById('waitlist-error');
+            const btn = form.querySelector('button[type="submit"]');
+            const showErr = msg => {
+                if (!err) return;
+                err.textContent = msg;
+                err.classList.add('is-on');
+            };
+            if (err) { err.textContent = ''; err.classList.remove('is-on'); }
+            const email = ((input && input.value) || '').trim();
+            if (!input || !email || !input.checkValidity()) {
+                showErr('Please enter a valid email.');
+                if (input) input.focus();
+                return;
+            }
+            if (btn) btn.disabled = true;
+            try {
+                const res = await fetch('/__waitlist', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email,
+                        productId: wait ? wait.dataset.productId : '',
+                        title: wait ? wait.dataset.title : ''
+                    })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data.ok) throw new Error('fail');
+                markWaitlistSent(wait ? wait.dataset.productId : '');
+                if (wait) wait.classList.add('is-sent');
+            } catch (ex) {
+                showErr('Could not save your email. Please try again.');
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        });
+    }
+    document.addEventListener('DOMContentLoaded', () => { initGallery(); bindWaitlist(); });
+    </script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+waitlist.jsonl
+index.html.checkpoint*
+devserver.py
+start-server.bat
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
+
+*.psd
+images/IMAGES-FOR-GALLERY-assets/
+images/PRODUCTS-assets/
+images/PRODUCTS2-assets/
+images/PRODUCTS3-assets/
+images/PRODUCTS3-Recovered-assets/
+images/SCRAP/
+images/New folder/
+images/images/
+images/png_files.txt
+images/product-showcase-*.png
+images/logo1.png
+images/mask.png
+images/line.png
+images/line-top-right.png
