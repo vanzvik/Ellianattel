@@ -93,11 +93,14 @@
             padding: 80px 60px; gap: 0px;
         }
         .chrome-root {
-            position: sticky;
+            position: fixed;
             top: 0;
+            left: 0;
+            right: 0;
             z-index: 20;
             background: #f2f2f0;
         }
+        .chrome-spacer { pointer-events: none; }
         .chrome-root .primary-architecture-wrapper { padding-bottom: 0; }
         .camera-stage .primary-architecture-wrapper { padding-top: 0; padding-bottom: 40px; }
         .app-header {
@@ -452,6 +455,7 @@
             </header>
         </div>
     </div>
+    <div class="chrome-spacer" aria-hidden="true"></div>
 
     <div class="camera-root" id="camera">
     <div class="blueprint-canvas" id="canvas"></div>
@@ -837,6 +841,14 @@
         return camera.animate(frames, opts);
     }
 
+    function syncChromeSpacer(){
+        const chrome = document.querySelector('.chrome-root');
+        const spacer = document.querySelector('.chrome-spacer');
+        if (!chrome || !spacer) return;
+        spacer.style.height = chrome.getBoundingClientRect().height + 'px';
+    }
+    window.addEventListener('resize', syncChromeSpacer);
+
     /* ================= GALLERY ================= */
     function initGallery(){
         const gallery = document.getElementById('gallery-view');
@@ -859,6 +871,12 @@
             a.appendChild(img); div.appendChild(a); gallery.appendChild(div);
             a.addEventListener('click', e => { e.preventDefault(); cameraToProduct(p.id, a); });
         });
+        const logoImg = document.querySelector('.brand-logo-img');
+        if (logoImg) {
+            if (logoImg.complete) syncChromeSpacer();
+            else logoImg.addEventListener('load', syncChromeSpacer, { once: true });
+        }
+        syncChromeSpacer();
         if (!seen) {
             const introMs = (0.2 + n * 0.07 + 0.9) * 1000 + 80;
             setTimeout(markGalleryIntroSeen, introMs);
