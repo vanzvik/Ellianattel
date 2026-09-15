@@ -39,6 +39,7 @@
 
         .camera-root {
             position: relative;
+            z-index: 1;
             width: 100%;
             min-height: 100vh;
             overflow: hidden;
@@ -92,9 +93,10 @@
             padding: 80px 60px; gap: 0px;
         }
         .chrome-root {
-            position: relative;
+            position: sticky;
+            top: 0;
             z-index: 20;
-            background: transparent;
+            background: #f2f2f0;
         }
         .chrome-root .primary-architecture-wrapper { padding-bottom: 0; }
         .camera-stage .primary-architecture-wrapper { padding-top: 0; padding-bottom: 40px; }
@@ -103,8 +105,9 @@
             padding-bottom: 80px; opacity: 0;
             animation: tileRise 0.9s var(--land) 0.2s both;
         }
-        .brand-logo-container { max-width: 340px; height: auto; }
+        .brand-logo-container { max-width: 272px; height: auto; }
         .brand-logo-img { width: 100%; height: auto; display: block; }
+        .mobile-logo-line { display: none; }
         .app-navigation { display: flex; gap: 0px; align-items: center; padding-top: 10px; padding-right: 15%; }
         .app-navigation-link { font-size: 0.75rem; font-weight: 600; text-decoration: none; color: #000000; letter-spacing: 1.5px; padding: 0 15px; }
         .nav-divider { width: 1px; height: 14px; background-color: #000000; opacity: 0.4; }
@@ -161,7 +164,8 @@
             opacity: 1;
             transform: none;
         }
-        body.gallery-seen .structural-line-h1 {
+        body.gallery-seen .structural-line-h1,
+        body.gallery-seen .mobile-logo-line {
             animation: none;
             clip-path: inset(0 0 0 0);
             opacity: 1;
@@ -316,8 +320,19 @@
             .primary-architecture-wrapper { padding: 26px 16px 70px; }
 
             /* header keeps CONTACT | ABOUT but fits a 320px viewport */
-            .app-header { padding-bottom: 40px; align-items: center; }
-            .brand-logo-container { max-width: min(200px, 48vw); }
+            .app-header { padding-bottom: 40px; align-items: flex-start; }
+            .brand-logo-container { max-width: min(160px, 38vw); }
+            .mobile-logo-line {
+                display: block;
+                width: 100%;
+                height: 10px;
+                margin-top: 8px;
+                object-fit: cover;
+                object-position: left center;
+                transform-origin: left center;
+                clip-path: inset(0 100% 0 0);
+                animation: drawRight 1.4s var(--glide) 0.2s both;
+            }
             .app-navigation { padding-top: 0; }
             .app-navigation-link { display: inline-flex; align-items: center; min-height: 44px;
                 font-size: 0.72rem; padding: 0 10px; letter-spacing: 1px; }
@@ -397,6 +412,7 @@
             .gallery-item, .app-header,
             .product-hero-facade, .product-central-gallery, .product-manifesto-container,
             .manifesto-meta-box, .related-series, .slider-pagination, .related-thumbnails a, .purchase-btn, .waitlist { opacity: 1 !important; transform: none !important; }
+            .mobile-logo-line, .structural-line-h1 { animation: none !important; clip-path: inset(0 0 0 0) !important; opacity: 1 !important; }
             .is-typing::after { display: none !important; }
             .camera-root { transform: none !important; }
         }
@@ -422,6 +438,7 @@
             <header class="app-header">
                 <div class="brand-logo-container">
                     <a href="#" id="logo"><img src="images/logo.png" alt="Ellia Nattel.K DESIGNER" class="brand-logo-img" onerror="this.style.display='none'"></a>
+                    <img src="images/line-bottom-right-h.png" alt="" class="mobile-logo-line" aria-hidden="true">
                 </div>
                 <nav class="app-navigation">
                     <a href="#contact" class="app-navigation-link">CONTACT</a>
